@@ -937,7 +937,7 @@
 
 {{-- ========================== SCRIPTS ========================== --}}
 @push('scripts')
-<script src="/vendor/ace/ace.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.5/src-min-noconflict/ace.js"></script>
 <script>
 function techInterviewPrep(){return{
 view:'landing',currentQuestion:null,reviewQuestion:null,currentStep:0,hintsRevealed:0,stuckRevealLevel:0,
@@ -1303,7 +1303,7 @@ syncSolutionEditor(){
     if(outer)container.style.height=Math.max(200,outer.offsetHeight)+'px';
     const lang=this.stepData.solutionLanguage||'python';
     try{
-      ace.config.set('basePath','/vendor/ace');
+      ace.config.set('basePath','https://cdn.jsdelivr.net/npm/ace-builds@1.36.5/src-min-noconflict');
       const editor=ace.edit(container);
       editor.setTheme('ace/theme/chrome');
       editor.session.setMode(this.aceModeForLang(lang));
