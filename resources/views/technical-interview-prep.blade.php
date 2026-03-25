@@ -163,17 +163,21 @@
 {{-- ===== GUIDED PRACTICE VIEW ===== --}}
 <div x-show="view==='practice'" x-transition class="space-y-4">
   <template x-if="currentQuestion">
-    <div class="flex flex-col lg:flex-row gap-6">
-      {{-- Sidebar: problem statement (persistent) --}}
-      <div class="lg:w-[380px] lg:shrink-0">
-        <div class="bg-white border border-gray-200 rounded-xl p-5 sticky top-4 space-y-4 max-h-[80vh] overflow-y-auto">
-          <div class="flex items-center justify-between">
+    <div class="space-y-4">
+      {{-- Problem statement (collapsible) --}}
+      <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <button @click="showProblem=!showProblem" class="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-gray-50">
+          <div class="flex items-center gap-3">
             <h3 class="font-bold text-gray-900" x-text="currentQuestion.title"></h3>
             <span class="px-2 py-0.5 rounded-full text-xs font-medium"
               :class="{'bg-green-100 text-green-700':currentQuestion.difficulty==='easy','bg-amber-100 text-amber-700':currentQuestion.difficulty==='medium','bg-red-100 text-red-700':currentQuestion.difficulty==='hard'}"
               x-text="currentQuestion.difficulty"></span>
+            <span class="text-xs text-gray-400" x-text="currentQuestion.patterns.map(p=>p.replace(/-/g,' ')).join(', ') + ' · ' + currentQuestion.recommendedTime + ' min'"></span>
           </div>
-          <p class="text-sm text-gray-700 whitespace-pre-line" x-text="currentQuestion.statement"></p>
+          <svg class="w-5 h-5 text-gray-400 transition-transform" :class="showProblem ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div x-show="showProblem" x-collapse class="px-5 pb-4 space-y-3 border-t border-gray-100">
+          <p class="text-sm text-gray-700 whitespace-pre-line pt-3" x-text="currentQuestion.statement"></p>
           <div class="space-y-2">
             <template x-for="ex in currentQuestion.examples" :key="ex.input">
               <div class="bg-gray-50 rounded-lg p-3 text-xs font-mono">
@@ -183,21 +187,16 @@
               </div>
             </template>
           </div>
-          <div class="text-xs text-gray-400">
-            <span x-text="currentQuestion.patterns.map(p=>p.replace(/-/g,' ')).join(', ')"></span>
-            &middot; <span x-text="currentQuestion.recommendedTime + ' min recommended'"></span>
-          </div>
-          {{-- User notes --}}
           <div>
             <label class="text-xs font-medium text-gray-500 block mb-1">Your notes</label>
-            <textarea x-model="stepData.notes" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="Scratch pad — jot anything here"
+            <textarea x-model="stepData.notes" @input.debounce.500ms="saveBookmark()" rows="2" placeholder="Scratch pad — jot anything here"
               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-y"></textarea>
           </div>
         </div>
       </div>
 
       {{-- Main area: current step --}}
-      <div class="flex-1 min-w-0">
+      <div>
         {{-- Progress stepper --}}
         <div class="flex items-center gap-1 mb-4 overflow-x-auto pb-1">
           <template x-for="(s, i) in stepLabels" :key="i">
@@ -824,7 +823,7 @@
 <script>
 function techInterviewPrep(){return{
 view:'landing',currentQuestion:null,reviewQuestion:null,currentStep:0,hintsRevealed:0,
-showStuckNudge:false,stuckTimerId:null,toast:null,
+showProblem:true,showStuckNudge:false,stuckTimerId:null,toast:null,
 
 stepLabels:['Restate','Clarify','I/O/Constraints','Brute Force','Trade-offs','Optimal','Time O(?)','Space O(?)','Edge Cases','Code','Reflect'],
 mistakeCategories:['Missed pattern','Wrong time complexity','Wrong space complexity','Forgot edge cases','Brute force only','Coding bug','Logic bug','Incomplete explanation','Poor trade-off reasoning'],
