@@ -19,7 +19,7 @@
       <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z"/></svg>
       <span x-text="user.streak.current + ' day' + (user.streak.current!==1?'s':'')"></span>
     </span>
-    <span x-show="view==='practice'" x-transition class="text-gray-400 text-xs">Press <kbd class="px-1 py-0.5 bg-gray-100 border border-gray-200 rounded text-gray-500">H</kbd> hint <kbd class="px-1 py-0.5 bg-gray-100 border border-gray-200 rounded text-gray-500">N</kbd> next <kbd class="px-1 py-0.5 bg-gray-100 border border-gray-200 rounded text-gray-500">S</kbd> skip</span>
+    <span x-show="view==='practice'" x-transition class="text-gray-400 text-xs hidden sm:inline">Keyboard: <kbd class="px-1 py-0.5 bg-gray-100 border border-gray-200 rounded text-[10px] text-gray-500">H</kbd> <kbd class="px-1 py-0.5 bg-gray-100 border border-gray-200 rounded text-[10px] text-gray-500">N</kbd> <kbd class="px-1 py-0.5 bg-gray-100 border border-gray-200 rounded text-[10px] text-gray-500">S</kbd></span>
   </div>
 </div>
 
@@ -197,36 +197,48 @@
 
       {{-- Main area: current step --}}
       <div>
-        {{-- Progress stepper --}}
-        <div class="flex items-center gap-1 mb-4 overflow-x-auto pb-1">
-          <template x-for="(s, i) in stepLabels" :key="i">
-            <div class="flex items-center">
-              <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium border-2 transition-all shrink-0"
-                :class="i < currentStep ? 'bg-indigo-600 border-indigo-600 text-white' : i === currentStep ? 'border-indigo-600 text-indigo-600' : 'border-gray-200 text-gray-400'"
-                x-text="i+1"></div>
-              <div x-show="i < stepLabels.length-1" class="w-4 h-0.5 mx-0.5" :class="i < currentStep ? 'bg-indigo-600' : 'bg-gray-200'"></div>
-            </div>
-          </template>
-        </div>
-        <div class="text-sm text-gray-500 mb-1" x-text="'Step ' + (currentStep+1) + ' of 11: ' + stepLabels[currentStep]"></div>
-
-        {{-- Timer bar --}}
-        <div class="mb-4" x-show="practiceTimer.running">
-          <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
-            <span x-text="formatTime(practiceTimer.elapsed)"></span>
-            <span x-text="formatTime(practiceTimer.total)"></span>
+        {{-- Interview context banner --}}
+        <div class="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 mb-4 flex items-start gap-3">
+          <div class="shrink-0 w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600 mt-0.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
           </div>
-          <div class="w-full bg-gray-200 rounded-full h-2">
-            <div class="h-2 rounded-full transition-all duration-1000"
-              :class="timerPct() > 90 ? 'bg-red-500' : timerPct() > 70 ? 'bg-amber-500' : 'bg-indigo-500'"
-              :style="'width:' + Math.min(100, timerPct()) + '%'"></div>
+          <div class="text-sm">
+            <span class="font-medium text-indigo-900">Practice like a real interview.</span>
+            <span class="text-indigo-700">Talk through each step as if an interviewer is listening. Type your reasoning — the goal is to practise explaining, not just solving.</span>
+          </div>
+        </div>
+
+        {{-- Progress stepper --}}
+        <div class="bg-white border border-gray-200 rounded-xl px-4 py-3 mb-4">
+          <div class="flex items-center justify-center gap-1 overflow-x-auto pb-1">
+            <template x-for="(s, i) in stepLabels" :key="i">
+              <div class="flex items-center">
+                <button @click="if(i <= currentStep) currentStep = i" class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium border-2 transition-all shrink-0"
+                  :class="i < currentStep ? 'bg-indigo-600 border-indigo-600 text-white cursor-pointer hover:bg-indigo-700' : i === currentStep ? 'border-indigo-600 text-indigo-600' : 'border-gray-200 text-gray-400 cursor-default'"
+                  x-text="i+1"></button>
+                <div x-show="i < stepLabels.length-1" class="w-3 sm:w-5 h-0.5 mx-0.5" :class="i < currentStep ? 'bg-indigo-600' : 'bg-gray-200'"></div>
+              </div>
+            </template>
+          </div>
+          {{-- Timer bar --}}
+          <div class="mt-2" x-show="practiceTimer.running">
+            <div class="flex items-center justify-between text-xs text-gray-400 mb-1">
+              <span x-text="formatTime(practiceTimer.elapsed)"></span>
+              <span class="font-medium" x-text="stepLabels[currentStep]"></span>
+              <span x-text="formatTime(practiceTimer.total)"></span>
+            </div>
+            <div class="w-full bg-gray-100 rounded-full h-1.5">
+              <div class="h-1.5 rounded-full transition-all duration-1000"
+                :class="timerPct() > 90 ? 'bg-red-400' : timerPct() > 70 ? 'bg-amber-400' : 'bg-indigo-400'"
+                :style="'width:' + Math.min(100, timerPct()) + '%'"></div>
+            </div>
           </div>
         </div>
 
         {{-- Stuck nudge --}}
         <div x-show="showStuckNudge" x-transition class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
           <p class="text-sm text-amber-800 mb-2">You've been on this step for a bit — want a nudge?</p>
-          <div class="flex gap-2">
+          <div class="flex flex-wrap gap-2">
             <button @click="revealHint()" class="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700">Give me a hint</button>
             <button @click="dismissStuckNudge('thinking')" class="px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-sm text-amber-700 hover:bg-amber-50">I'm thinking</button>
             <button @click="skipStep()" class="px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-sm text-amber-700 hover:bg-amber-50">Skip to next step</button>
@@ -234,129 +246,153 @@
         </div>
 
         {{-- Step content area --}}
-        <div class="bg-white border border-gray-200 rounded-xl p-6 min-h-[300px]">
+        <div class="bg-white border border-gray-200 rounded-xl p-6">
 
           {{-- Step 0: Restate the problem --}}
           <div x-show="currentStep===0">
-            <h3 class="font-semibold text-gray-900 mb-3">Restate the problem in your own words</h3>
-            <div class="mb-3 flex gap-2">
-              <button @click="stepData.useTemplates=true" class="text-xs px-3 py-1 rounded-full" :class="stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-600'">Template</button>
-              <button @click="stepData.useTemplates=false" class="text-xs px-3 py-1 rounded-full" :class="!stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-600'">Freeform</button>
+            <div class="flex items-center justify-between mb-1">
+              <h3 class="font-semibold text-gray-900">Step 1: Restate the problem</h3>
+              <div class="flex gap-2">
+                <button @click="stepData.useTemplates=true" class="text-xs px-3 py-1 rounded-full" :class="stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-600'">Template</button>
+                <button @click="stepData.useTemplates=false" class="text-xs px-3 py-1 rounded-full" :class="!stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-600'">Freeform</button>
+              </div>
             </div>
+            <p class="text-sm text-gray-500 mb-4">In an interview, you'd repeat the problem back to the interviewer to show you understand it. Write it in your own words below.</p>
             <template x-if="stepData.useTemplates">
               <div class="space-y-3">
                 <div>
-                  <label class="text-xs text-gray-500 block mb-1">This problem is asking me to...</label>
-                  <textarea x-model="stepData.restate" @input.debounce.500ms="saveBookmark()" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea>
+                  <label class="text-sm font-medium text-gray-700 block mb-1">This problem is asking me to...</label>
+                  <textarea x-model="stepData.restate" @input.debounce.500ms="saveBookmark()" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
                 </div>
                 <div>
-                  <label class="text-xs text-gray-500 block mb-1">The input is... and the expected output is...</label>
-                  <textarea x-model="stepData.inputOutput" @input.debounce.500ms="saveBookmark()" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea>
+                  <label class="text-sm font-medium text-gray-700 block mb-1">The input is... and the expected output is...</label>
+                  <textarea x-model="stepData.inputOutput" @input.debounce.500ms="saveBookmark()" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
                 </div>
               </div>
             </template>
             <template x-if="!stepData.useTemplates">
-              <textarea x-model="stepData.restate" @input.debounce.500ms="saveBookmark()" rows="4" placeholder="Restate the problem..." class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea>
+              <textarea x-model="stepData.restate" @input.debounce.500ms="saveBookmark()" rows="4" placeholder="In my own words, this problem is about..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
             </template>
           </div>
 
           {{-- Step 1: Clarify assumptions --}}
           <div x-show="currentStep===1">
-            <h3 class="font-semibold text-gray-900 mb-3">Clarify assumptions</h3>
-            <p class="text-sm text-gray-500 mb-3">What questions would you ask the interviewer?</p>
+            <h3 class="font-semibold text-gray-900 mb-1">Step 2: Clarify assumptions</h3>
+            <p class="text-sm text-gray-500 mb-4">Good candidates ask clarifying questions before diving in. What would you ask the interviewer? Think about edge cases, input ranges, and constraints.</p>
             <textarea x-model="stepData.assumptions" @input.debounce.500ms="saveBookmark()" rows="4"
-              placeholder="e.g. Can the array contain negatives? Is the array sorted? Are there duplicates?"
-              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea>
+              placeholder="e.g.&#10;- Can the input be empty?&#10;- Are there negative numbers?&#10;- Is the array sorted?&#10;- Can there be duplicates?"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
           </div>
 
           {{-- Step 2: Identify inputs/outputs/constraints --}}
           <div x-show="currentStep===2">
-            <h3 class="font-semibold text-gray-900 mb-3">Identify inputs, outputs, and constraints</h3>
+            <h3 class="font-semibold text-gray-900 mb-1">Step 3: Define inputs, outputs, and constraints</h3>
+            <p class="text-sm text-gray-500 mb-4">Be explicit about what goes in and what comes out. This is how interviewers check you actually understand the problem before you code.</p>
             <div class="space-y-3">
-              <div><label class="text-xs text-gray-500 block mb-1">Inputs</label><textarea x-model="stepData.inputs" @input.debounce.500ms="saveBookmark()" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea></div>
-              <div><label class="text-xs text-gray-500 block mb-1">Outputs</label><textarea x-model="stepData.outputs" @input.debounce.500ms="saveBookmark()" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea></div>
-              <div><label class="text-xs text-gray-500 block mb-1">Constraints</label><textarea x-model="stepData.constraints" @input.debounce.500ms="saveBookmark()" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea></div>
+              <div><label class="text-sm font-medium text-gray-700 block mb-1">Inputs</label><textarea x-model="stepData.inputs" @input.debounce.500ms="saveBookmark()" rows="2" placeholder="e.g. An integer array and a target integer" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
+              <div><label class="text-sm font-medium text-gray-700 block mb-1">Outputs</label><textarea x-model="stepData.outputs" @input.debounce.500ms="saveBookmark()" rows="2" placeholder="e.g. Indices of the two numbers that add up to target" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
+              <div><label class="text-sm font-medium text-gray-700 block mb-1">Constraints</label><textarea x-model="stepData.constraints" @input.debounce.500ms="saveBookmark()" rows="2" placeholder="e.g. Exactly one solution exists, can't use same element twice" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
             </div>
           </div>
 
           {{-- Step 3: Describe brute force --}}
           <div x-show="currentStep===3">
-            <h3 class="font-semibold text-gray-900 mb-3">Describe brute force approach</h3>
+            <div class="flex items-center justify-between mb-1">
+              <h3 class="font-semibold text-gray-900">Step 4: Describe a brute force approach</h3>
+              <div class="flex gap-2" x-show="currentStep===3">
+                <button @click="stepData.useTemplates=true" class="text-xs px-3 py-1 rounded-full" :class="stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-600'">Template</button>
+                <button @click="stepData.useTemplates=false" class="text-xs px-3 py-1 rounded-full" :class="!stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-600'">Freeform</button>
+              </div>
+            </div>
+            <p class="text-sm text-gray-500 mb-4">Start simple. Interviewers want to see you can think of any working solution before optimising. What's the most straightforward approach, even if it's slow?</p>
             <template x-if="stepData.useTemplates">
               <div class="space-y-3">
-                <div><label class="text-xs text-gray-500 block mb-1">A brute force approach would be to... because...</label><textarea x-model="stepData.bruteForce" @input.debounce.500ms="saveBookmark()" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea></div>
-                <div><label class="text-xs text-gray-500 block mb-1">Its time complexity is O(___) because...</label><textarea x-model="stepData.bruteForceTC" @input.debounce.500ms="saveBookmark()" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea></div>
+                <div><label class="text-sm font-medium text-gray-700 block mb-1">A brute force approach would be to... because...</label><textarea x-model="stepData.bruteForce" @input.debounce.500ms="saveBookmark()" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
+                <div><label class="text-sm font-medium text-gray-700 block mb-1">Its time complexity is O(___) because...</label><textarea x-model="stepData.bruteForceTC" @input.debounce.500ms="saveBookmark()" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
               </div>
             </template>
             <template x-if="!stepData.useTemplates">
-              <textarea x-model="stepData.bruteForce" @input.debounce.500ms="saveBookmark()" rows="5" placeholder="Describe a brute force solution..." class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea>
+              <textarea x-model="stepData.bruteForce" @input.debounce.500ms="saveBookmark()" rows="5" placeholder="The simplest approach would be..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
             </template>
           </div>
 
           {{-- Step 4: Discuss trade-offs --}}
           <div x-show="currentStep===4">
-            <h3 class="font-semibold text-gray-900 mb-3">Discuss trade-offs</h3>
-            <textarea x-model="stepData.tradeoffs" @input.debounce.500ms="saveBookmark()" rows="4" placeholder="What are the trade-offs between brute force and a better approach? What bottleneck could you improve?" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea>
+            <h3 class="font-semibold text-gray-900 mb-1">Step 5: Discuss trade-offs</h3>
+            <p class="text-sm text-gray-500 mb-4">Interviewers love hearing you think about trade-offs. Compare your brute force to a better approach — what are you trading for the speed gain?</p>
+            <textarea x-model="stepData.tradeoffs" @input.debounce.500ms="saveBookmark()" rows="4" placeholder="e.g. Brute force is O(n²) using nested loops. We can trade space for time by using a hash map to get O(n)..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
           </div>
 
           {{-- Step 5: Describe optimal approach --}}
           <div x-show="currentStep===5">
-            <h3 class="font-semibold text-gray-900 mb-3">Describe optimal approach</h3>
+            <div class="flex items-center justify-between mb-1">
+              <h3 class="font-semibold text-gray-900">Step 6: Describe your optimal approach</h3>
+              <div class="flex gap-2">
+                <button @click="stepData.useTemplates=true" class="text-xs px-3 py-1 rounded-full" :class="stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-600'">Template</button>
+                <button @click="stepData.useTemplates=false" class="text-xs px-3 py-1 rounded-full" :class="!stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-600'">Freeform</button>
+              </div>
+            </div>
+            <p class="text-sm text-gray-500 mb-4">Now explain your better solution. Name the technique or pattern you'd use and walk through how it works.</p>
             <template x-if="stepData.useTemplates">
               <div class="space-y-3">
-                <div><label class="text-xs text-gray-500 block mb-1">The optimal approach uses [pattern] because...</label><textarea x-model="stepData.optimal" @input.debounce.500ms="saveBookmark()" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea></div>
+                <div><label class="text-sm font-medium text-gray-700 block mb-1">The optimal approach uses [pattern] because...</label><textarea x-model="stepData.optimal" @input.debounce.500ms="saveBookmark()" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
               </div>
             </template>
             <template x-if="!stepData.useTemplates">
-              <textarea x-model="stepData.optimal" @input.debounce.500ms="saveBookmark()" rows="5" placeholder="Describe the optimal approach..." class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea>
+              <textarea x-model="stepData.optimal" @input.debounce.500ms="saveBookmark()" rows="5" placeholder="A better approach would be..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
             </template>
           </div>
 
           {{-- Step 6: Time complexity --}}
           <div x-show="currentStep===6">
-            <h3 class="font-semibold text-gray-900 mb-3">State time complexity</h3>
+            <h3 class="font-semibold text-gray-900 mb-1">Step 7: State time complexity</h3>
+            <p class="text-sm text-gray-500 mb-4">You'll always be asked this. State the Big-O and explain <strong>why</strong> — don't just say "O(n)", justify it.</p>
             <template x-if="stepData.useTemplates">
-              <div><label class="text-xs text-gray-500 block mb-1">Time complexity is O(___) because...</label><textarea x-model="stepData.timeComplexity" @input.debounce.500ms="saveBookmark()" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea></div>
+              <div><label class="text-sm font-medium text-gray-700 block mb-1">Time complexity is O(___) because...</label><textarea x-model="stepData.timeComplexity" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="e.g. O(n) — we iterate through the array once, doing O(1) hash lookups" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
             </template>
             <template x-if="!stepData.useTemplates">
-              <textarea x-model="stepData.timeComplexity" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="What is the time complexity?" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea>
+              <textarea x-model="stepData.timeComplexity" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="Time complexity and why..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
             </template>
           </div>
 
           {{-- Step 7: Space complexity --}}
           <div x-show="currentStep===7">
-            <h3 class="font-semibold text-gray-900 mb-3">State space complexity</h3>
+            <h3 class="font-semibold text-gray-900 mb-1">Step 8: State space complexity</h3>
+            <p class="text-sm text-gray-500 mb-4">How much extra memory does your solution use? If you used a hash map, array, or stack, mention it here.</p>
             <template x-if="stepData.useTemplates">
-              <div><label class="text-xs text-gray-500 block mb-1">Space complexity is O(___) because...</label><textarea x-model="stepData.spaceComplexity" @input.debounce.500ms="saveBookmark()" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea></div>
+              <div><label class="text-sm font-medium text-gray-700 block mb-1">Space complexity is O(___) because...</label><textarea x-model="stepData.spaceComplexity" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="e.g. O(n) — we store up to n elements in the hash map" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
             </template>
             <template x-if="!stepData.useTemplates">
-              <textarea x-model="stepData.spaceComplexity" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="What is the space complexity?" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea>
+              <textarea x-model="stepData.spaceComplexity" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="Space complexity and why..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
             </template>
           </div>
 
           {{-- Step 8: List edge cases --}}
           <div x-show="currentStep===8">
-            <h3 class="font-semibold text-gray-900 mb-3">List edge cases</h3>
+            <h3 class="font-semibold text-gray-900 mb-1">Step 9: List edge cases</h3>
+            <p class="text-sm text-gray-500 mb-4">Before writing code, think about inputs that could break your solution. Interviewers specifically check if you consider these.</p>
             <template x-if="stepData.useTemplates">
-              <div><label class="text-xs text-gray-500 block mb-1">Edge cases to watch for: empty input, single element, ___</label><textarea x-model="stepData.edgeCases" @input.debounce.500ms="saveBookmark()" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea></div>
+              <div><label class="text-sm font-medium text-gray-700 block mb-1">Edge cases to watch for:</label><textarea x-model="stepData.edgeCases" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="e.g.&#10;- Empty array&#10;- Single element&#10;- All duplicates&#10;- Very large input" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
             </template>
             <template x-if="!stepData.useTemplates">
-              <textarea x-model="stepData.edgeCases" @input.debounce.500ms="saveBookmark()" rows="4" placeholder="List edge cases..." class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea>
+              <textarea x-model="stepData.edgeCases" @input.debounce.500ms="saveBookmark()" rows="4" placeholder="What inputs could break your solution?" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
             </template>
           </div>
 
           {{-- Step 9: Write solution --}}
           <div x-show="currentStep===9">
-            <h3 class="font-semibold text-gray-900 mb-3">Write your solution</h3>
-            <textarea x-model="stepData.solution" @input.debounce.500ms="saveBookmark()" rows="12" placeholder="Write your solution code or pseudocode here..." class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono"></textarea>
+            <h3 class="font-semibold text-gray-900 mb-1">Step 10: Write your solution</h3>
+            <p class="text-sm text-gray-500 mb-4">Now code it up. Use any language or pseudocode — the goal is to practise translating your approach into working logic.</p>
+            <textarea x-model="stepData.solution" @input.debounce.500ms="saveBookmark()" rows="12" placeholder="// Write your solution here&#10;// Use any language or pseudocode&#10;&#10;function solve(input) {&#10;  &#10;}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
           </div>
 
           {{-- Step 10: Reflect --}}
           <div x-show="currentStep===10">
-            <h3 class="font-semibold text-gray-900 mb-3">Reflect</h3>
+            <h3 class="font-semibold text-gray-900 mb-1">Step 11: Reflect on your attempt</h3>
+            <p class="text-sm text-gray-500 mb-4">This is the most important step for learning. Be honest about what went well and what didn't — your future self will thank you.</p>
             <div class="space-y-4">
               <div>
-                <label class="text-xs text-gray-500 block mb-2">What pattern was this really testing?</label>
+                <label class="text-sm font-medium text-gray-700 block mb-2">What pattern was this really testing?</label>
                 <div class="flex flex-wrap gap-2">
                   <template x-for="p in currentQuestion.patterns.concat(currentQuestion.patternQuiz?.distractors || []).sort()" :key="p">
                     <button @click="stepData.selectedPattern=p" class="px-3 py-1.5 rounded-full text-sm border transition-all" :class="stepData.selectedPattern===p?'bg-indigo-100 border-indigo-400 text-indigo-700':'border-gray-200 text-gray-600 hover:border-gray-300'" x-text="p.replace(/-/g,' ')"></button>
@@ -364,7 +400,7 @@
                 </div>
               </div>
               <div>
-                <label class="text-xs text-gray-500 block mb-2">What did you miss? (select all that apply)</label>
+                <label class="text-sm font-medium text-gray-700 block mb-2">What did you miss? (select all that apply)</label>
                 <div class="flex flex-wrap gap-2">
                   <template x-for="m in mistakeCategories" :key="m">
                     <button @click="toggleMistake(m)" class="px-3 py-1.5 rounded-full text-sm border transition-all"
@@ -373,20 +409,20 @@
                 </div>
               </div>
               <div>
-                <label class="text-xs text-gray-500 block mb-2">Confidence for next time?</label>
+                <label class="text-sm font-medium text-gray-700 block mb-2">Confidence for next time?</label>
                 <input type="range" x-model.number="stepData.confidence" min="1" max="5" class="w-full accent-indigo-600">
                 <div class="flex justify-between text-xs text-gray-400"><span>Not confident</span><span>Very confident</span></div>
               </div>
               <div>
-                <label class="text-xs text-gray-500 block mb-1">Anything else to remember? (optional)</label>
-                <textarea x-model="stepData.freeReflection" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea>
+                <label class="text-sm font-medium text-gray-700 block mb-1">Anything else to remember? (optional)</label>
+                <textarea x-model="stepData.freeReflection" rows="2" placeholder="e.g. I keep forgetting to handle the empty array case" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
               </div>
             </div>
           </div>
         </div>
 
         {{-- Hints panel --}}
-        <div class="mt-4" x-show="hintsRevealed > 0">
+        <div class="mt-4" x-show="hintsRevealed > 0" x-transition>
           <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
             <div class="text-xs font-semibold text-blue-800 mb-1">Hints revealed</div>
             <template x-for="(h, i) in currentQuestion.hints.slice(0, hintsRevealed)" :key="i">
@@ -400,13 +436,13 @@
           <div class="flex gap-2">
             <button @click="prevStep()" x-show="currentStep > 0" class="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Back</button>
             <button @click="revealHint()" x-show="currentStep < 10 && hintsRevealed < 5" class="px-4 py-2 border border-blue-200 rounded-lg text-sm text-blue-600 hover:bg-blue-50">
-              Hint <span class="text-xs" x-text="'(' + hintsRevealed + '/5)'"></span> <span class="text-xs text-gray-400">[H]</span>
+              Hint <span class="text-xs" x-text="'(' + hintsRevealed + '/5)'"></span>
             </button>
           </div>
           <div class="flex gap-2">
-            <button @click="skipStep()" x-show="currentStep < 10" class="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-500 hover:bg-gray-50">Skip <span class="text-xs text-gray-400">[S]</span></button>
-            <button @click="nextStep()" x-show="currentStep < 10" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">Next <span class="text-xs text-indigo-200">[N]</span></button>
-            <button @click="finishPractice()" x-show="currentStep === 10" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700">Finish</button>
+            <button @click="skipStep()" x-show="currentStep < 10" class="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-500 hover:bg-gray-50">Skip</button>
+            <button @click="nextStep()" x-show="currentStep < 10" class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">Next step</button>
+            <button @click="finishPractice()" x-show="currentStep === 10" class="px-5 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700">Finish & save</button>
           </div>
         </div>
 
