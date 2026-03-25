@@ -1,6 +1,6 @@
 # Technical Interview Prep
 
-ADHD-friendly technical interview preparation tool with algorithmic pattern training, complexity drills, guided problem-solving, and spaced repetition.
+Technical interview preparation tool with algorithmic pattern training, complexity drills, guided problem-solving, and spaced repetition.
 
 **Live tool:** [urlcv.com/tools/technical-interview-prep](https://urlcv.com/tools/technical-interview-prep)
 
@@ -15,15 +15,14 @@ ADHD-friendly technical interview preparation tool with algorithmic pattern trai
 - **Focus Map dashboard** — see strengths, weaknesses, and a clear next action
 - **Spaced repetition (SM-2)** — weak problems resurface at optimal intervals
 
-### ADHD-friendly design
+### Designed to keep you moving
 
-- Energy-based session modes (10 / 30 / 60 min)
+- Session modes by available time (10 / 30 / 60 min)
 - Warm-up rounds to build momentum
-- Sentence starters to prevent blank-page paralysis
-- Stuck timer with gentle nudges
+- Sentence starters and templates to get past blank-page moments
+- Gentle nudges when you're stuck
 - Quick-exit bookmarking with instant resume
-- Streak system with a very low minimum bar
-- Positive framing — growth areas, not failures
+- Streak system to build consistency
 - Keyboard shortcuts for every action
 
 ## Installation

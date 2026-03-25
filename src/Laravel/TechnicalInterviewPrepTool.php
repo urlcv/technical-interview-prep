@@ -20,7 +20,7 @@ class TechnicalInterviewPrepTool implements ToolInterface
 
     public function summary(): string
     {
-        return 'Master algorithms, data structures, and complexity analysis with guided practice, pattern drills, and ADHD-friendly spaced repetition.';
+        return 'Master algorithms, data structures, and complexity analysis with guided practice, pattern drills, and spaced repetition.';
     }
 
     public function descriptionMd(): ?string
@@ -28,26 +28,25 @@ class TechnicalInterviewPrepTool implements ToolInterface
         return <<<'MD'
 ## Technical Interview Prep
 
-A complete, browser-based training system for technical coding interviews. Designed for ADHD brains — every feature prioritises low friction, visible progress, and immediate feedback.
+A complete, browser-based training system for technical coding interviews. Low friction, visible progress, and immediate feedback at every step.
 
 ### Core features
 - **25+ algorithm problems** across arrays, strings, trees, graphs, DP, and more — each with 5-level progressive hints, brute-force and optimal solutions, complexity analysis, and interviewer follow-ups
 - **Guided problem-solving flow** — an 11-step structured interview simulation from restating the problem through coding to reflection
 - **Pattern recognition drills** — identify which algorithmic pattern applies to a problem summary
 - **Complexity drills** — analyse code snippets for time and space complexity
-- **Mock interview mode** — timed, realistic simulations with follow-up questions (20-minute ADHD-friendly default)
+- **Mock interview mode** — timed, realistic simulations with follow-up questions
 - **Flashcards & rapid revision** — spaced-repetition flashcards covering core concepts
 - **Focus Map dashboard** — see your strongest and weakest areas with a single clear next action
 - **Spaced repetition (SM-2)** — weak problems resurface automatically at optimal intervals
 
-### ADHD-friendly design
-- Energy-based session modes (10 / 30 / 60 min)
-- Warm-up rounds to build momentum before hard problems
-- Sentence starters to prevent blank-page paralysis
-- Stuck timer with gentle nudges
+### Designed to keep you moving
+- Session modes by available time (10 / 30 / 60 min)
+- Warm-up rounds to build momentum
+- Sentence starters and templates to get past blank-page moments
+- Gentle nudges when you're stuck
 - Quick-exit bookmarking with instant resume
-- Streak system with a very low minimum bar
-- Positive framing — no guilt, no failure language, just growth areas
+- Streak system to build consistency
 - Keyboard shortcuts for every action
 
 ### How it works
@@ -62,7 +61,7 @@ MD;
 
     public function tags(): array
     {
-        return ['interview', 'algorithms', 'coding', 'data-structures', 'complexity', 'leetcode', 'practice', 'adhd'];
+        return ['interview', 'algorithms', 'coding', 'data-structures', 'complexity', 'leetcode', 'practice'];
     }
 
     public function inputSchema(): array

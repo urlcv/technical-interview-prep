@@ -1,6 +1,6 @@
 {
     "name": "urlcv/technical-interview-prep",
-    "description": "ADHD-friendly technical interview preparation tool with algorithmic pattern training, complexity drills, guided problem-solving, and spaced repetition. Powers the free Technical Interview Prep tool at urlcv.com.",
+    "description": "Technical interview preparation tool with algorithmic pattern training, complexity drills, guided problem-solving, and spaced repetition. Powers the free Technical Interview Prep tool at urlcv.com.",
     "type": "library",
     "license": "MIT",
     "keywords": ["interview", "algorithms", "data-structures", "coding-interview", "leetcode", "complexity", "patterns", "spaced-repetition"],
