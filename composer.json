@@ -1,0 +1,37 @@
+{
+    "name": "urlcv/technical-interview-prep",
+    "description": "ADHD-friendly technical interview preparation tool with algorithmic pattern training, complexity drills, guided problem-solving, and spaced repetition. Powers the free Technical Interview Prep tool at urlcv.com.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["interview", "algorithms", "data-structures", "coding-interview", "leetcode", "complexity", "patterns", "spaced-repetition"],
+    "homepage": "https://urlcv.com/tools/technical-interview-prep",
+    "authors": [
+        {
+            "name": "URLCV",
+            "homepage": "https://urlcv.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1"
+    },
+    "suggest": {
+        "illuminate/support": "Required for Laravel integration (Blade views)"
+    },
+    "autoload": {
+        "psr-4": {
+            "URLCV\\TechnicalInterviewPrep\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "URLCV\\TechnicalInterviewPrep\\Laravel\\TechnicalInterviewPrepServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    },
+    "minimum-stability": "stable"
+}
