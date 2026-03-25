@@ -1,4 +1,7 @@
 {{-- Technical Interview Prep — fully client-side Alpine.js tool --}}
+@push('head')
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+@endpush
 <div x-data="techInterviewPrep()" x-init="init()" x-cloak
      @keydown.window="handleKey($event)" class="min-h-[80vh]">
 
@@ -379,11 +382,36 @@
             </template>
           </div>
 
-          {{-- Step 9: Write solution --}}
+          {{-- Step 9: Write solution (CodeMirror when available; plain textarea fallback) --}}
           <div x-show="currentStep===9">
             <h3 class="font-semibold text-gray-900 mb-1">Step 10: Write your solution</h3>
-            <p class="text-sm text-gray-500 mb-4">Now code it up. Use any language or pseudocode — the goal is to practise translating your approach into working logic.</p>
-            <textarea x-model="stepData.solution" @input.debounce.500ms="saveBookmark()" rows="12" placeholder="// Write your solution here&#10;// Use any language or pseudocode&#10;&#10;function solve(input) {&#10;  &#10;}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+            <p class="text-sm text-gray-500 mb-2">Type a real solution in a language you use in interviews — line numbers, indentation, and syntax highlighting work like a lightweight editor. Nothing runs on our servers; copy into LeetCode or your IDE to execute tests.</p>
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+              <label class="text-sm font-medium text-gray-700">Language (highlighting)</label>
+              <select x-model="stepData.solutionLanguage" @change="onSolutionLanguageChange()" class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent max-w-full" :disabled="usePlainSolutionEditor">
+                <option value="python">Python</option>
+                <option value="javascript">JavaScript</option>
+                <option value="typescript">TypeScript</option>
+                <option value="java">Java</option>
+                <option value="cpp">C++</option>
+                <option value="csharp">C#</option>
+                <option value="go">Go</option>
+                <option value="ruby">Ruby</option>
+                <option value="php">PHP</option>
+                <option value="sql">SQL</option>
+                <option value="plaintext">Plain text / pseudocode</option>
+              </select>
+            </div>
+            <template x-if="usePlainSolutionEditor">
+              <textarea x-model="stepData.solution" @input.debounce.500ms="saveBookmark()" rows="14" spellcheck="false"
+                class="w-full font-mono text-sm p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                placeholder="// Your solution"></textarea>
+            </template>
+            <div x-show="!usePlainSolutionEditor" class="rounded-lg border border-gray-300 overflow-hidden bg-white tip-code-editor-wrap">
+              <textarea x-ref="solutionTextarea" rows="14" spellcheck="false"
+                class="w-full font-mono text-sm p-3 border-0 focus:ring-0"
+                placeholder="// Your solution — switch language above for highlighting"></textarea>
+            </div>
           </div>
 
           {{-- Step 10: Reflect --}}
@@ -856,15 +884,24 @@
 
 {{-- ========================== SCRIPTS ========================== --}}
 @push('scripts')
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/ruby/ruby.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/go/go.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/php/php.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 function techInterviewPrep(){return{
 view:'landing',currentQuestion:null,reviewQuestion:null,currentStep:0,hintsRevealed:0,
 showProblem:true,showStuckNudge:false,stuckTimerId:null,toast:null,
+usePlainSolutionEditor:false,
 
 stepLabels:['Restate','Clarify','I/O/Constraints','Brute Force','Trade-offs','Optimal','Time O(?)','Space O(?)','Edge Cases','Code','Reflect'],
 mistakeCategories:['Missed pattern','Wrong time complexity','Wrong space complexity','Forgot edge cases','Brute force only','Coding bug','Logic bug','Incomplete explanation','Poor trade-off reasoning'],
 
-stepData:{useTemplates:true,restate:'',inputOutput:'',assumptions:'',inputs:'',outputs:'',constraints:'',bruteForce:'',bruteForceTC:'',tradeoffs:'',optimal:'',timeComplexity:'',spaceComplexity:'',edgeCases:'',solution:'',notes:'',selectedPattern:'',mistakes:[],confidence:3,freeReflection:'',skippedSteps:[]},
+stepData:{useTemplates:true,restate:'',inputOutput:'',assumptions:'',inputs:'',outputs:'',constraints:'',bruteForce:'',bruteForceTC:'',tradeoffs:'',optimal:'',timeComplexity:'',spaceComplexity:'',edgeCases:'',solution:'',solutionLanguage:'python',notes:'',selectedPattern:'',mistakes:[],confidence:3,freeReflection:'',skippedSteps:[]},
 
 practiceTimer:{running:false,elapsed:0,total:0,interval:null},
 mockState:{active:false,duration:20,question:null,elapsed:0,total:0,interval:null,answer:'',hintsUsed:0},
@@ -888,9 +925,12 @@ get allCategories(){return[...new Set(this.questions.map(q=>q.category))].sort()
 get allPatterns(){return[...new Set(this.questions.flatMap(q=>q.patterns))].sort()},
 
 init(){
+  this.usePlainSolutionEditor=typeof CodeMirror==='undefined';
   this.loadData();
   this.updateStreak();
   this.stepData.useTemplates=this.user.prefs.templateMode==='template';
+  this.$watch('currentStep',()=>{this.syncSolutionEditor()});
+  this.$watch('view',()=>{this.syncSolutionEditor()});
 },
 
 loadData(){try{const d=localStorage.getItem('tip_user');if(d)this.user={...this.user,...JSON.parse(d)}}catch(e){}},
@@ -928,8 +968,9 @@ dismissStuckNudge(reason){this.showStuckNudge=false;if(reason==='thinking')this.
 
 // ===== PRACTICE =====
 startPractice(q){
+  this.destroySolutionEditor();
   this.currentQuestion=q;this.reviewQuestion=null;this.currentStep=0;this.hintsRevealed=0;
-  this.stepData={useTemplates:this.user.prefs.templateMode==='template',restate:'',inputOutput:'',assumptions:'',inputs:'',outputs:'',constraints:'',bruteForce:'',bruteForceTC:'',tradeoffs:'',optimal:'',timeComplexity:'',spaceComplexity:'',edgeCases:'',solution:'',notes:'',selectedPattern:'',mistakes:[],confidence:3,freeReflection:'',skippedSteps:[]};
+  this.stepData={useTemplates:this.user.prefs.templateMode==='template',restate:'',inputOutput:'',assumptions:'',inputs:'',outputs:'',constraints:'',bruteForce:'',bruteForceTC:'',tradeoffs:'',optimal:'',timeComplexity:'',spaceComplexity:'',edgeCases:'',solution:'',solutionLanguage:'python',notes:'',selectedPattern:'',mistakes:[],confidence:3,freeReflection:'',skippedSteps:[]};
   this.practiceTimer={running:true,elapsed:0,total:q.recommendedTime*60,interval:null};
   this.practiceTimer.interval=setInterval(()=>{this.practiceTimer.elapsed++},1000);
   this.view='practice';
@@ -954,12 +995,82 @@ saveBookmark(){
 resumeBookmark(){
   if(!this.user.bookmark)return;
   const q=this.getQ(this.user.bookmark.questionId);if(!q)return;
+  this.destroySolutionEditor();
   this.currentQuestion=q;this.currentStep=this.user.bookmark.step;
   this.stepData={...this.stepData,...this.user.bookmark.stepData};
+  if(!this.stepData.solutionLanguage)this.stepData.solutionLanguage='python';
   this.hintsRevealed=this.user.bookmark.hintsRevealed||0;
   this.practiceTimer={running:true,elapsed:this.user.bookmark.elapsed||0,total:q.recommendedTime*60,interval:null};
   this.practiceTimer.interval=setInterval(()=>{this.practiceTimer.elapsed++},1000);
   this.view='practice';this.startStuckTimer();
+},
+
+destroySolutionEditor(){
+  if(!this._solutionCm)return;
+  try{
+    this.stepData.solution=this._solutionCm.getValue();
+    this._solutionCm.toTextArea();
+  }catch(e){}
+  this._solutionCm=null;
+},
+
+cmModeForLang(lang){
+  const map={
+    javascript:'javascript',
+    typescript:'javascript',
+    python:'python',
+    java:'text/x-java',
+    cpp:'text/x-c++src',
+    csharp:'text/x-csharp',
+    go:'go',
+    ruby:'ruby',
+    php:'php',
+    sql:'text/x-sql',
+    plaintext:null
+  };
+  return Object.prototype.hasOwnProperty.call(map,lang)?map[lang]:'python';
+},
+
+syncSolutionEditor(){
+  if(this.usePlainSolutionEditor)return;
+  if(typeof CodeMirror==='undefined')return;
+  if(this.view!=='practice'||this.currentStep!==9){
+    this.destroySolutionEditor();
+    return;
+  }
+  this.$nextTick(()=>{
+    const ta=this.$refs.solutionTextarea;
+    if(!ta)return;
+    if(this._solutionCm)return;
+    const mode=this.cmModeForLang(this.stepData.solutionLanguage||'python');
+    this._solutionCm=CodeMirror.fromTextArea(ta,{
+      lineNumbers:true,
+      mode:mode,
+      indentUnit:4,
+      tabSize:4,
+      indentWithTabs:false,
+      lineWrapping:true,
+      viewportMargin:50,
+    });
+    this._solutionCm.setValue(this.stepData.solution||'');
+    let saveT;
+    this._solutionCm.on('change',()=>{
+      this.stepData.solution=this._solutionCm.getValue();
+      clearTimeout(saveT);
+      saveT=setTimeout(()=>this.saveBookmark(),500);
+    });
+    const h=Math.min(440,Math.max(280,Math.floor(window.innerHeight*0.42)));
+    this._solutionCm.setSize(null,h);
+  });
+},
+
+onSolutionLanguageChange(){
+  if(this._solutionCm){
+    try{
+      this._solutionCm.setOption('mode',this.cmModeForLang(this.stepData.solutionLanguage||'python'));
+    }catch(e){}
+  }
+  this.saveBookmark();
 },
 
 saveAndExit(){this.saveBookmark();this.clearTimers();this.view='landing';this.showToast('Progress saved — pick up anytime')},
@@ -1200,6 +1311,7 @@ resetData(){
 
 // ===== KEYBOARD =====
 handleKey(e){
+  if(e.target.closest&&e.target.closest('.CodeMirror'))return;
   if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT')return;
   if(this.view==='practice'){
     if(e.key==='h'||e.key==='H')this.revealHint();
@@ -1584,4 +1696,5 @@ flashcards:[
 
 @push('styles')
 <style>[x-cloak]{display:none!important}</style>
+<style>.tip-code-editor-wrap .CodeMirror{font-size:13px;border-radius:0.5rem}.tip-code-editor-wrap .CodeMirror-scroll{min-height:280px}</style>
 @endpush
