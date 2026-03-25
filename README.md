@@ -32,6 +32,11 @@ composer require urlcv/technical-interview-prep
 ```
 
 The package auto-discovers its service provider via Laravel's package discovery.
+If your app does not already publish Laravel assets during Composer updates, run:
+
+```bash
+php artisan vendor:publish --tag=laravel-assets
+```
 
 ## How it works
 

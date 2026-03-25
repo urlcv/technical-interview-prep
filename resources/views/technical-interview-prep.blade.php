@@ -1,7 +1,5 @@
 {{-- Technical Interview Prep — fully client-side Alpine.js tool --}}
-@push('head')
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-@endpush
+{{-- Ace Editor injects its own styles — no CSS link needed --}}
 <div x-data="techInterviewPrep()" x-init="init()" x-cloak
      @keydown.window="handleKey($event)" class="min-h-[80vh]">
 
@@ -163,325 +161,380 @@
   </div>
 </div>
 
-{{-- ===== GUIDED PRACTICE VIEW ===== --}}
-<div x-show="view==='practice'" x-transition class="space-y-4">
+{{-- ===== GUIDED PRACTICE VIEW (full-screen overlay) ===== --}}
+<template x-teleport="body">
+<div x-show="view==='practice'" class="fixed inset-0 z-50 bg-gray-50 flex flex-col" style="display:none">
   <template x-if="currentQuestion">
-    <div class="space-y-4">
-      {{-- Problem statement (collapsible) --}}
-      <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <button @click="showProblem=!showProblem" class="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-gray-50">
-          <div class="flex items-center gap-3">
-            <h3 class="font-bold text-gray-900" x-text="currentQuestion.title"></h3>
-            <span class="px-2 py-0.5 rounded-full text-xs font-medium"
-              :class="{'bg-green-100 text-green-700':currentQuestion.difficulty==='easy','bg-amber-100 text-amber-700':currentQuestion.difficulty==='medium','bg-red-100 text-red-700':currentQuestion.difficulty==='hard'}"
-              x-text="currentQuestion.difficulty"></span>
-            <span class="text-xs text-gray-400" x-text="currentQuestion.patterns.map(p=>p.replace(/-/g,' ')).join(', ') + ' · ' + currentQuestion.recommendedTime + ' min'"></span>
-          </div>
-          <svg class="w-5 h-5 text-gray-400 transition-transform" :class="showProblem ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-        </button>
-        <div x-show="showProblem" x-collapse class="px-5 pb-4 space-y-3 border-t border-gray-100">
-          <p class="text-sm text-gray-700 whitespace-pre-line pt-3" x-text="currentQuestion.statement"></p>
-          <div class="space-y-2">
-            <template x-for="ex in currentQuestion.examples" :key="ex.input">
-              <div class="bg-gray-50 rounded-lg p-3 text-xs font-mono">
-                <div><span class="text-gray-500">Input:</span> <span x-text="ex.input"></span></div>
-                <div><span class="text-gray-500">Output:</span> <span x-text="ex.output"></span></div>
-                <div class="text-gray-500 mt-1" x-text="ex.explanation" x-show="ex.explanation"></div>
-              </div>
+    <div class="flex flex-col h-full">
+
+      {{-- Top bar --}}
+      <div class="shrink-0 bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 min-w-0">
+          <button @click="saveAndExit()" class="text-gray-400 hover:text-gray-600 shrink-0" title="Exit">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+          <h2 class="font-bold text-gray-900 truncate" x-text="currentQuestion.title"></h2>
+          <span class="px-2 py-0.5 rounded-full text-xs font-medium shrink-0"
+            :class="{'bg-green-100 text-green-700':currentQuestion.difficulty==='easy','bg-amber-100 text-amber-700':currentQuestion.difficulty==='medium','bg-red-100 text-red-700':currentQuestion.difficulty==='hard'}"
+            x-text="currentQuestion.difficulty"></span>
+          <span class="text-xs text-gray-400 hidden sm:inline truncate" x-text="currentQuestion.patterns.map(p=>p.replace(/-/g,' ')).join(', ')"></span>
+        </div>
+        <div class="flex items-center gap-3 shrink-0">
+          {{-- Timer --}}
+          <div class="text-xs text-gray-400 tabular-nums" x-show="practiceTimer.running" x-text="formatTime(practiceTimer.elapsed) + ' / ' + formatTime(practiceTimer.total)"></div>
+          {{-- Step indicator --}}
+          <div class="hidden sm:flex items-center gap-0.5">
+            <template x-for="(s, i) in stepLabels" :key="i">
+              <div class="w-2 h-2 rounded-full transition-all" :class="i < currentStep ? 'bg-indigo-600' : i === currentStep ? 'bg-indigo-400 ring-2 ring-indigo-200' : 'bg-gray-200'"></div>
             </template>
           </div>
-          <div>
-            <label class="text-xs font-medium text-gray-500 block mb-1">Your notes</label>
-            <textarea x-model="stepData.notes" @input.debounce.500ms="saveBookmark()" rows="2" placeholder="Scratch pad — jot anything here"
-              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-y"></textarea>
-          </div>
+          <span class="text-xs text-gray-500 font-medium" x-text="(currentStep+1) + '/' + stepLabels.length + ' ' + stepLabels[currentStep]"></span>
         </div>
       </div>
 
-      {{-- Main area: current step --}}
-      <div>
-        {{-- Interview context banner --}}
-        <div class="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 mb-4 flex items-start gap-3">
-          <div class="shrink-0 w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600 mt-0.5">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
-          </div>
-          <div class="text-sm">
-            <span class="font-medium text-indigo-900">Practice like a real interview.</span>
-            <span class="text-indigo-700">Talk through each step as if an interviewer is listening. Type your reasoning — the goal is to practise explaining, not just solving.</span>
-          </div>
-        </div>
+      {{-- Main split panes --}}
+      <div class="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
 
-        {{-- Progress stepper --}}
-        <div class="bg-white border border-gray-200 rounded-xl px-4 py-3 mb-4">
-          <div class="flex items-center justify-center gap-1 overflow-x-auto pb-1">
-            <template x-for="(s, i) in stepLabels" :key="i">
-              <div class="flex items-center">
-                <button @click="if(i <= currentStep) currentStep = i" class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium border-2 transition-all shrink-0"
-                  :class="i < currentStep ? 'bg-indigo-600 border-indigo-600 text-white cursor-pointer hover:bg-indigo-700' : i === currentStep ? 'border-indigo-600 text-indigo-600' : 'border-gray-200 text-gray-400 cursor-default'"
-                  x-text="i+1"></button>
-                <div x-show="i < stepLabels.length-1" class="w-3 sm:w-5 h-0.5 mx-0.5" :class="i < currentStep ? 'bg-indigo-600' : 'bg-gray-200'"></div>
-              </div>
-            </template>
-          </div>
-          {{-- Timer bar --}}
-          <div class="mt-2" x-show="practiceTimer.running">
-            <div class="flex items-center justify-between text-xs text-gray-400 mb-1">
-              <span x-text="formatTime(practiceTimer.elapsed)"></span>
-              <span class="font-medium" x-text="stepLabels[currentStep]"></span>
-              <span x-text="formatTime(practiceTimer.total)"></span>
-            </div>
-            <div class="w-full bg-gray-100 rounded-full h-1.5">
-              <div class="h-1.5 rounded-full transition-all duration-1000"
-                :class="timerPct() > 90 ? 'bg-red-400' : timerPct() > 70 ? 'bg-amber-400' : 'bg-indigo-400'"
-                :style="'width:' + Math.min(100, timerPct()) + '%'"></div>
-            </div>
-          </div>
-        </div>
+        {{-- LEFT PANE: problem + guided steps --}}
+        <div class="lg:w-1/2 flex flex-col min-h-0 border-r border-gray-200 bg-white">
 
-        {{-- Stuck nudge --}}
-        <div x-show="showStuckNudge" x-transition class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
-          <p class="text-sm text-amber-800 mb-2">You've been on this step for a bit — want a nudge?</p>
-          <div class="flex flex-wrap gap-2">
-            <button @click="revealHint()" class="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700">Give me a hint</button>
-            <button @click="dismissStuckNudge('thinking')" class="px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-sm text-amber-700 hover:bg-amber-50">I'm thinking</button>
-            <button @click="skipStep()" class="px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-sm text-amber-700 hover:bg-amber-50">Skip to next step</button>
-          </div>
-        </div>
-
-        {{-- Step content area --}}
-        <div class="bg-white border border-gray-200 rounded-xl p-6">
-
-          {{-- Step 0: Restate the problem --}}
-          <div x-show="currentStep===0">
-            <div class="flex items-center justify-between mb-1">
-              <h3 class="font-semibold text-gray-900">Step 1: Restate the problem</h3>
-              <div class="flex gap-2">
-                <button @click="stepData.useTemplates=true" class="text-xs px-3 py-1 rounded-full" :class="stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-600'">Template</button>
-                <button @click="stepData.useTemplates=false" class="text-xs px-3 py-1 rounded-full" :class="!stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-600'">Freeform</button>
-              </div>
-            </div>
-            <p class="text-sm text-gray-500 mb-4">In an interview, you'd repeat the problem back to the interviewer to show you understand it. Write it in your own words below.</p>
-            <template x-if="stepData.useTemplates">
-              <div class="space-y-3">
-                <div>
-                  <label class="text-sm font-medium text-gray-700 block mb-1">This problem is asking me to...</label>
-                  <textarea x-model="stepData.restate" @input.debounce.500ms="saveBookmark()" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
-                </div>
-                <div>
-                  <label class="text-sm font-medium text-gray-700 block mb-1">The input is... and the expected output is...</label>
-                  <textarea x-model="stepData.inputOutput" @input.debounce.500ms="saveBookmark()" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
-                </div>
-              </div>
-            </template>
-            <template x-if="!stepData.useTemplates">
-              <textarea x-model="stepData.restate" @input.debounce.500ms="saveBookmark()" rows="4" placeholder="In my own words, this problem is about..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
-            </template>
-          </div>
-
-          {{-- Step 1: Clarify assumptions --}}
-          <div x-show="currentStep===1">
-            <h3 class="font-semibold text-gray-900 mb-1">Step 2: Clarify assumptions</h3>
-            <p class="text-sm text-gray-500 mb-4">Good candidates ask clarifying questions before diving in. What would you ask the interviewer? Think about edge cases, input ranges, and constraints.</p>
-            <textarea x-model="stepData.assumptions" @input.debounce.500ms="saveBookmark()" rows="4"
-              placeholder="e.g.&#10;- Can the input be empty?&#10;- Are there negative numbers?&#10;- Is the array sorted?&#10;- Can there be duplicates?"
-              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
-          </div>
-
-          {{-- Step 2: Identify inputs/outputs/constraints --}}
-          <div x-show="currentStep===2">
-            <h3 class="font-semibold text-gray-900 mb-1">Step 3: Define inputs, outputs, and constraints</h3>
-            <p class="text-sm text-gray-500 mb-4">Be explicit about what goes in and what comes out. This is how interviewers check you actually understand the problem before you code.</p>
-            <div class="space-y-3">
-              <div><label class="text-sm font-medium text-gray-700 block mb-1">Inputs</label><textarea x-model="stepData.inputs" @input.debounce.500ms="saveBookmark()" rows="2" placeholder="e.g. An integer array and a target integer" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
-              <div><label class="text-sm font-medium text-gray-700 block mb-1">Outputs</label><textarea x-model="stepData.outputs" @input.debounce.500ms="saveBookmark()" rows="2" placeholder="e.g. Indices of the two numbers that add up to target" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
-              <div><label class="text-sm font-medium text-gray-700 block mb-1">Constraints</label><textarea x-model="stepData.constraints" @input.debounce.500ms="saveBookmark()" rows="2" placeholder="e.g. Exactly one solution exists, can't use same element twice" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
-            </div>
-          </div>
-
-          {{-- Step 3: Describe brute force --}}
-          <div x-show="currentStep===3">
-            <div class="flex items-center justify-between mb-1">
-              <h3 class="font-semibold text-gray-900">Step 4: Describe a brute force approach</h3>
-              <div class="flex gap-2" x-show="currentStep===3">
-                <button @click="stepData.useTemplates=true" class="text-xs px-3 py-1 rounded-full" :class="stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-600'">Template</button>
-                <button @click="stepData.useTemplates=false" class="text-xs px-3 py-1 rounded-full" :class="!stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-600'">Freeform</button>
-              </div>
-            </div>
-            <p class="text-sm text-gray-500 mb-4">Start simple. Interviewers want to see you can think of any working solution before optimising. What's the most straightforward approach, even if it's slow?</p>
-            <template x-if="stepData.useTemplates">
-              <div class="space-y-3">
-                <div><label class="text-sm font-medium text-gray-700 block mb-1">A brute force approach would be to... because...</label><textarea x-model="stepData.bruteForce" @input.debounce.500ms="saveBookmark()" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
-                <div><label class="text-sm font-medium text-gray-700 block mb-1">Its time complexity is O(___) because...</label><textarea x-model="stepData.bruteForceTC" @input.debounce.500ms="saveBookmark()" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
-              </div>
-            </template>
-            <template x-if="!stepData.useTemplates">
-              <textarea x-model="stepData.bruteForce" @input.debounce.500ms="saveBookmark()" rows="5" placeholder="The simplest approach would be..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
-            </template>
-          </div>
-
-          {{-- Step 4: Discuss trade-offs --}}
-          <div x-show="currentStep===4">
-            <h3 class="font-semibold text-gray-900 mb-1">Step 5: Discuss trade-offs</h3>
-            <p class="text-sm text-gray-500 mb-4">Interviewers love hearing you think about trade-offs. Compare your brute force to a better approach — what are you trading for the speed gain?</p>
-            <textarea x-model="stepData.tradeoffs" @input.debounce.500ms="saveBookmark()" rows="4" placeholder="e.g. Brute force is O(n²) using nested loops. We can trade space for time by using a hash map to get O(n)..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
-          </div>
-
-          {{-- Step 5: Describe optimal approach --}}
-          <div x-show="currentStep===5">
-            <div class="flex items-center justify-between mb-1">
-              <h3 class="font-semibold text-gray-900">Step 6: Describe your optimal approach</h3>
-              <div class="flex gap-2">
-                <button @click="stepData.useTemplates=true" class="text-xs px-3 py-1 rounded-full" :class="stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-600'">Template</button>
-                <button @click="stepData.useTemplates=false" class="text-xs px-3 py-1 rounded-full" :class="!stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-600'">Freeform</button>
-              </div>
-            </div>
-            <p class="text-sm text-gray-500 mb-4">Now explain your better solution. Name the technique or pattern you'd use and walk through how it works.</p>
-            <template x-if="stepData.useTemplates">
-              <div class="space-y-3">
-                <div><label class="text-sm font-medium text-gray-700 block mb-1">The optimal approach uses [pattern] because...</label><textarea x-model="stepData.optimal" @input.debounce.500ms="saveBookmark()" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
-              </div>
-            </template>
-            <template x-if="!stepData.useTemplates">
-              <textarea x-model="stepData.optimal" @input.debounce.500ms="saveBookmark()" rows="5" placeholder="A better approach would be..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
-            </template>
-          </div>
-
-          {{-- Step 6: Time complexity --}}
-          <div x-show="currentStep===6">
-            <h3 class="font-semibold text-gray-900 mb-1">Step 7: State time complexity</h3>
-            <p class="text-sm text-gray-500 mb-4">You'll always be asked this. State the Big-O and explain <strong>why</strong> — don't just say "O(n)", justify it.</p>
-            <template x-if="stepData.useTemplates">
-              <div><label class="text-sm font-medium text-gray-700 block mb-1">Time complexity is O(___) because...</label><textarea x-model="stepData.timeComplexity" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="e.g. O(n) — we iterate through the array once, doing O(1) hash lookups" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
-            </template>
-            <template x-if="!stepData.useTemplates">
-              <textarea x-model="stepData.timeComplexity" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="Time complexity and why..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
-            </template>
-          </div>
-
-          {{-- Step 7: Space complexity --}}
-          <div x-show="currentStep===7">
-            <h3 class="font-semibold text-gray-900 mb-1">Step 8: State space complexity</h3>
-            <p class="text-sm text-gray-500 mb-4">How much extra memory does your solution use? If you used a hash map, array, or stack, mention it here.</p>
-            <template x-if="stepData.useTemplates">
-              <div><label class="text-sm font-medium text-gray-700 block mb-1">Space complexity is O(___) because...</label><textarea x-model="stepData.spaceComplexity" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="e.g. O(n) — we store up to n elements in the hash map" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
-            </template>
-            <template x-if="!stepData.useTemplates">
-              <textarea x-model="stepData.spaceComplexity" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="Space complexity and why..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
-            </template>
-          </div>
-
-          {{-- Step 8: List edge cases --}}
-          <div x-show="currentStep===8">
-            <h3 class="font-semibold text-gray-900 mb-1">Step 9: List edge cases</h3>
-            <p class="text-sm text-gray-500 mb-4">Before writing code, think about inputs that could break your solution. Interviewers specifically check if you consider these.</p>
-            <template x-if="stepData.useTemplates">
-              <div><label class="text-sm font-medium text-gray-700 block mb-1">Edge cases to watch for:</label><textarea x-model="stepData.edgeCases" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="e.g.&#10;- Empty array&#10;- Single element&#10;- All duplicates&#10;- Very large input" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
-            </template>
-            <template x-if="!stepData.useTemplates">
-              <textarea x-model="stepData.edgeCases" @input.debounce.500ms="saveBookmark()" rows="4" placeholder="What inputs could break your solution?" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
-            </template>
-          </div>
-
-          {{-- Step 9: Write solution (CodeMirror when available; plain textarea fallback) --}}
-          <div x-show="currentStep===9">
-            <h3 class="font-semibold text-gray-900 mb-1">Step 10: Write your solution</h3>
-            <p class="text-sm text-gray-500 mb-2">Type a real solution in a language you use in interviews — line numbers, indentation, and syntax highlighting work like a lightweight editor. Nothing runs on our servers; copy into LeetCode or your IDE to execute tests.</p>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-              <label class="text-sm font-medium text-gray-700">Language (highlighting)</label>
-              <select x-model="stepData.solutionLanguage" @change="onSolutionLanguageChange()" class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent max-w-full" :disabled="usePlainSolutionEditor">
-                <option value="python">Python</option>
-                <option value="javascript">JavaScript</option>
-                <option value="typescript">TypeScript</option>
-                <option value="java">Java</option>
-                <option value="cpp">C++</option>
-                <option value="csharp">C#</option>
-                <option value="go">Go</option>
-                <option value="ruby">Ruby</option>
-                <option value="php">PHP</option>
-                <option value="sql">SQL</option>
-                <option value="plaintext">Plain text / pseudocode</option>
-              </select>
-            </div>
-            <template x-if="usePlainSolutionEditor">
-              <textarea x-model="stepData.solution" @input.debounce.500ms="saveBookmark()" rows="14" spellcheck="false"
-                class="w-full font-mono text-sm p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder="// Your solution"></textarea>
-            </template>
-            <div x-show="!usePlainSolutionEditor" class="rounded-lg border border-gray-300 overflow-hidden bg-white tip-code-editor-wrap">
-              <textarea x-ref="solutionTextarea" rows="14" spellcheck="false"
-                class="w-full font-mono text-sm p-3 border-0 focus:ring-0"
-                placeholder="// Your solution — switch language above for highlighting"></textarea>
-            </div>
-          </div>
-
-          {{-- Step 10: Reflect --}}
-          <div x-show="currentStep===10">
-            <h3 class="font-semibold text-gray-900 mb-1">Step 11: Reflect on your attempt</h3>
-            <p class="text-sm text-gray-500 mb-4">This is the most important step for learning. Be honest about what went well and what didn't — your future self will thank you.</p>
-            <div class="space-y-4">
-              <div>
-                <label class="text-sm font-medium text-gray-700 block mb-2">What pattern was this really testing?</label>
-                <div class="flex flex-wrap gap-2">
-                  <template x-for="p in currentQuestion.patterns.concat(currentQuestion.patternQuiz?.distractors || []).sort()" :key="p">
-                    <button @click="stepData.selectedPattern=p" class="px-3 py-1.5 rounded-full text-sm border transition-all" :class="stepData.selectedPattern===p?'bg-indigo-100 border-indigo-400 text-indigo-700':'border-gray-200 text-gray-600 hover:border-gray-300'" x-text="p.replace(/-/g,' ')"></button>
-                  </template>
-                </div>
-              </div>
-              <div>
-                <label class="text-sm font-medium text-gray-700 block mb-2">What did you miss? (select all that apply)</label>
-                <div class="flex flex-wrap gap-2">
-                  <template x-for="m in mistakeCategories" :key="m">
-                    <button @click="toggleMistake(m)" class="px-3 py-1.5 rounded-full text-sm border transition-all"
-                      :class="stepData.mistakes.includes(m)?'bg-amber-100 border-amber-400 text-amber-700':'border-gray-200 text-gray-600 hover:border-gray-300'" x-text="m"></button>
-                  </template>
-                </div>
-              </div>
-              <div>
-                <label class="text-sm font-medium text-gray-700 block mb-2">Confidence for next time?</label>
-                <input type="range" x-model.number="stepData.confidence" min="1" max="5" class="w-full accent-indigo-600">
-                <div class="flex justify-between text-xs text-gray-400"><span>Not confident</span><span>Very confident</span></div>
-              </div>
-              <div>
-                <label class="text-sm font-medium text-gray-700 block mb-1">Anything else to remember? (optional)</label>
-                <textarea x-model="stepData.freeReflection" rows="2" placeholder="e.g. I keep forgetting to handle the empty array case" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {{-- Hints panel --}}
-        <div class="mt-4" x-show="hintsRevealed > 0" x-transition>
-          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
-            <div class="text-xs font-semibold text-blue-800 mb-1">Hints revealed</div>
-            <template x-for="(h, i) in currentQuestion.hints.slice(0, hintsRevealed)" :key="i">
-              <div class="text-sm text-blue-700"><span class="font-medium" x-text="'Level ' + (i+1) + ': '"></span><span x-text="h"></span></div>
-            </template>
-          </div>
-        </div>
-
-        {{-- Nav buttons --}}
-        <div class="flex items-center justify-between mt-4">
-          <div class="flex gap-2">
-            <button @click="prevStep()" x-show="currentStep > 0" class="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Back</button>
-            <button @click="revealHint()" x-show="currentStep < 10 && hintsRevealed < 5" class="px-4 py-2 border border-blue-200 rounded-lg text-sm text-blue-600 hover:bg-blue-50">
-              Hint <span class="text-xs" x-text="'(' + hintsRevealed + '/5)'"></span>
+          {{-- Left pane tabs --}}
+          <div class="shrink-0 flex border-b border-gray-200 bg-gray-50 px-4">
+            <button @click="practiceTab='problem'" class="px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors"
+              :class="practiceTab==='problem' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'">Problem</button>
+            <button @click="practiceTab='steps'" class="px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors"
+              :class="practiceTab==='steps' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'">
+              Steps <span class="text-gray-400" x-text="'(' + (currentStep+1) + '/' + stepLabels.length + ')'"></span>
+            </button>
+            <button @click="practiceTab='hints'" class="px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors"
+              :class="practiceTab==='hints' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'">
+              Hints <span class="text-gray-400" x-text="'(' + hintsRevealed + '/5)'"></span>
             </button>
           </div>
-          <div class="flex gap-2">
-            <button @click="skipStep()" x-show="currentStep < 10" class="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-500 hover:bg-gray-50">Skip</button>
-            <button @click="nextStep()" x-show="currentStep < 10" class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">Next step</button>
-            <button @click="finishPractice()" x-show="currentStep === 10" class="px-5 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700">Finish & save</button>
-          </div>
-        </div>
 
-        {{-- Save & exit --}}
-        <div class="mt-3 text-center">
-          <button @click="saveAndExit()" class="text-xs text-gray-400 hover:text-gray-600">Save and exit — pick up later</button>
-        </div>
-      </div>
+          {{-- Left pane scrollable content --}}
+          <div class="flex-1 overflow-y-auto p-5 space-y-4">
+
+            {{-- PROBLEM TAB --}}
+            <div x-show="practiceTab==='problem'">
+              <p class="text-sm text-gray-700 whitespace-pre-line leading-relaxed" x-text="currentQuestion.statement"></p>
+              <div class="mt-4 space-y-2">
+                <template x-for="ex in currentQuestion.examples" :key="ex.input">
+                  <div class="bg-gray-50 rounded-lg p-3 text-xs font-mono">
+                    <div><span class="text-gray-500">Input:</span> <span x-text="ex.input"></span></div>
+                    <div><span class="text-gray-500">Output:</span> <span x-text="ex.output"></span></div>
+                    <div class="text-gray-500 mt-1" x-text="ex.explanation" x-show="ex.explanation"></div>
+                  </div>
+                </template>
+              </div>
+              <div class="mt-4">
+                <label class="text-xs font-medium text-gray-500 block mb-1">Scratch pad</label>
+                <textarea x-model="stepData.notes" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="Jot anything here..."
+                  class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-y"></textarea>
+              </div>
+            </div>
+
+            {{-- STEPS TAB --}}
+            <div x-show="practiceTab==='steps'">
+
+              {{-- Stuck nudge --}}
+              <div x-show="showStuckNudge" x-transition class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                <p class="text-sm text-amber-800 mb-2">Stuck? Try a hint or skip ahead.</p>
+                <div class="flex flex-wrap gap-2">
+                  <button @click="revealHint();practiceTab='hints'" class="px-3 py-1 bg-amber-600 text-white rounded text-xs hover:bg-amber-700">Hint</button>
+                  <button @click="startStuckMode()" class="px-3 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700">Unblock me</button>
+                  <button @click="dismissStuckNudge('thinking')" class="px-3 py-1 bg-white border border-amber-300 rounded text-xs text-amber-700">Thinking</button>
+                  <button @click="skipStep()" class="px-3 py-1 bg-white border border-amber-300 rounded text-xs text-amber-700">Skip</button>
+                </div>
+              </div>
+
+              {{-- Step 0: Restate --}}
+              <div x-show="currentStep===0" class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <h3 class="font-semibold text-gray-900 text-sm">Restate the problem</h3>
+                  <div class="flex gap-1">
+                    <button @click="stepData.useTemplates=true" class="text-xs px-2 py-0.5 rounded-full" :class="stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-500'">Template</button>
+                    <button @click="stepData.useTemplates=false" class="text-xs px-2 py-0.5 rounded-full" :class="!stepData.useTemplates?'bg-indigo-100 text-indigo-700':'bg-gray-100 text-gray-500'">Freeform</button>
+                  </div>
+                </div>
+                <p class="text-xs text-gray-500">Repeat the problem in your own words to show you understand it.</p>
+                <template x-if="stepData.useTemplates">
+                  <div class="space-y-2">
+                    <div><label class="text-xs font-medium text-gray-600 block mb-1">This problem is asking me to...</label><textarea x-model="stepData.restate" @input.debounce.500ms="saveBookmark()" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
+                    <div><label class="text-xs font-medium text-gray-600 block mb-1">The input is... and expected output is...</label><textarea x-model="stepData.inputOutput" @input.debounce.500ms="saveBookmark()" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
+                  </div>
+                </template>
+                <template x-if="!stepData.useTemplates">
+                  <textarea x-model="stepData.restate" @input.debounce.500ms="saveBookmark()" rows="4" placeholder="In my own words, this problem is about..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+                </template>
+              </div>
+
+              {{-- Step 1: Clarify --}}
+              <div x-show="currentStep===1" class="space-y-3">
+                <h3 class="font-semibold text-gray-900 text-sm">Clarify assumptions</h3>
+                <p class="text-xs text-gray-500">What would you ask the interviewer before starting?</p>
+                <textarea x-model="stepData.assumptions" @input.debounce.500ms="saveBookmark()" rows="4" placeholder="e.g.&#10;- Can the input be empty?&#10;- Are there negative numbers?&#10;- Is the array sorted?" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+              </div>
+
+              {{-- Step 2: I/O/Constraints --}}
+              <div x-show="currentStep===2" class="space-y-3">
+                <h3 class="font-semibold text-gray-900 text-sm">Inputs, outputs, constraints</h3>
+                <p class="text-xs text-gray-500">Be explicit about what goes in and what comes out.</p>
+                <div class="space-y-2">
+                  <div><label class="text-xs font-medium text-gray-600 block mb-1">Inputs</label><textarea x-model="stepData.inputs" @input.debounce.500ms="saveBookmark()" rows="2" placeholder="e.g. An integer array and a target" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
+                  <div><label class="text-xs font-medium text-gray-600 block mb-1">Outputs</label><textarea x-model="stepData.outputs" @input.debounce.500ms="saveBookmark()" rows="2" placeholder="e.g. Indices of two numbers" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
+                  <div><label class="text-xs font-medium text-gray-600 block mb-1">Constraints</label><textarea x-model="stepData.constraints" @input.debounce.500ms="saveBookmark()" rows="2" placeholder="e.g. Exactly one solution exists" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea></div>
+                </div>
+              </div>
+
+              {{-- Step 3: Brute force --}}
+              <div x-show="currentStep===3" class="space-y-3">
+                <h3 class="font-semibold text-gray-900 text-sm">Brute force approach</h3>
+                <p class="text-xs text-gray-500">What's the simplest working solution, even if it's slow?</p>
+                <textarea x-model="stepData.bruteForce" @input.debounce.500ms="saveBookmark()" rows="4" placeholder="The simplest approach would be..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+                <textarea x-model="stepData.bruteForceTC" @input.debounce.500ms="saveBookmark()" rows="2" placeholder="Time complexity: O(___) because..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+              </div>
+
+              {{-- Step 4: Trade-offs --}}
+              <div x-show="currentStep===4" class="space-y-3">
+                <h3 class="font-semibold text-gray-900 text-sm">Trade-offs</h3>
+                <p class="text-xs text-gray-500">Compare brute force to a better approach. What are you trading?</p>
+                <textarea x-model="stepData.tradeoffs" @input.debounce.500ms="saveBookmark()" rows="4" placeholder="e.g. Brute force is O(n²). We can trade space for time using a hash map to get O(n)..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+              </div>
+
+              {{-- Step 5: Optimal --}}
+              <div x-show="currentStep===5" class="space-y-3">
+                <h3 class="font-semibold text-gray-900 text-sm">Optimal approach</h3>
+                <p class="text-xs text-gray-500">Name the pattern and walk through how it works.</p>
+                <textarea x-model="stepData.optimal" @input.debounce.500ms="saveBookmark()" rows="5" placeholder="The optimal approach uses [pattern] because..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+              </div>
+
+              {{-- Step 6: Time complexity --}}
+              <div x-show="currentStep===6" class="space-y-3">
+                <h3 class="font-semibold text-gray-900 text-sm">Time complexity</h3>
+                <p class="text-xs text-gray-500">State the Big-O and explain <strong>why</strong>.</p>
+                <textarea x-model="stepData.timeComplexity" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="O(n) because we iterate once, doing O(1) lookups..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+              </div>
+
+              {{-- Step 7: Space complexity --}}
+              <div x-show="currentStep===7" class="space-y-3">
+                <h3 class="font-semibold text-gray-900 text-sm">Space complexity</h3>
+                <p class="text-xs text-gray-500">How much extra memory does your solution use?</p>
+                <textarea x-model="stepData.spaceComplexity" @input.debounce.500ms="saveBookmark()" rows="3" placeholder="O(n) because we store up to n elements in the hash map..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+              </div>
+
+              {{-- Step 8: Edge cases --}}
+              <div x-show="currentStep===8" class="space-y-3">
+                <h3 class="font-semibold text-gray-900 text-sm">Edge cases</h3>
+                <p class="text-xs text-gray-500">What inputs could break your solution?</p>
+                <textarea x-model="stepData.edgeCases" @input.debounce.500ms="saveBookmark()" rows="4" placeholder="- Empty array&#10;- Single element&#10;- All duplicates&#10;- Very large input" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+              </div>
+
+              {{-- Step 9: Reflect --}}
+              <div x-show="currentStep===9" class="space-y-4">
+                <h3 class="font-semibold text-gray-900 text-sm">Reflect on your attempt</h3>
+                <div>
+                  <label class="text-xs font-medium text-gray-600 block mb-2">What pattern was this?</label>
+                  <div class="flex flex-wrap gap-1.5">
+                    <template x-for="p in currentQuestion.patterns.concat(currentQuestion.patternQuiz?.distractors || []).sort()" :key="p">
+                      <button @click="stepData.selectedPattern=p" class="px-2.5 py-1 rounded-full text-xs border transition-all" :class="stepData.selectedPattern===p?'bg-indigo-100 border-indigo-400 text-indigo-700':'border-gray-200 text-gray-600 hover:border-gray-300'" x-text="p.replace(/-/g,' ')"></button>
+                    </template>
+                  </div>
+                </div>
+                <div>
+                  <label class="text-xs font-medium text-gray-600 block mb-2">What did you miss?</label>
+                  <div class="flex flex-wrap gap-1.5">
+                    <template x-for="m in mistakeCategories" :key="m">
+                      <button @click="toggleMistake(m)" class="px-2.5 py-1 rounded-full text-xs border transition-all" :class="stepData.mistakes.includes(m)?'bg-amber-100 border-amber-400 text-amber-700':'border-gray-200 text-gray-600 hover:border-gray-300'" x-text="m"></button>
+                    </template>
+                  </div>
+                </div>
+                <div>
+                  <label class="text-xs font-medium text-gray-600 block mb-1">Confidence</label>
+                  <input type="range" x-model.number="stepData.confidence" min="1" max="5" class="w-full accent-indigo-600">
+                  <div class="flex justify-between text-xs text-gray-400"><span>Low</span><span>High</span></div>
+                </div>
+                <textarea x-model="stepData.freeReflection" rows="2" placeholder="Anything else to remember?" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+              </div>
+
+            </div>{{-- /steps tab --}}
+
+            {{-- HINTS TAB --}}
+            <div x-show="practiceTab==='hints'" x-ref="hintsPanel">
+              <div x-show="hintsRevealed===0" class="text-center py-8">
+                <p class="text-sm text-gray-500 mb-3">No hints revealed yet.</p>
+                <button @click="revealHint()" x-show="hintsRevealed < 5" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">Reveal first hint</button>
+              </div>
+              <div x-show="hintsRevealed > 0" class="space-y-3">
+                <template x-for="(h, i) in currentQuestion.hints.slice(0, hintsRevealed)" :key="i">
+                  <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div class="text-xs font-semibold text-blue-800 mb-1" x-text="'Hint ' + (i+1)"></div>
+                    <div class="text-sm text-blue-700" x-text="h"></div>
+                  </div>
+                </template>
+                <button @click="revealHint()" x-show="hintsRevealed < 5" class="w-full py-2 border border-blue-200 rounded-lg text-sm text-blue-600 hover:bg-blue-50">Reveal next hint</button>
+              </div>
+
+              <div class="mt-5 border-t border-gray-100 pt-5">
+                <div x-show="stuckRevealLevel===0" class="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <div class="text-sm font-semibold text-indigo-900">Stuck Mode</div>
+                      <p class="text-sm text-indigo-800 mt-1">Use this when hints are not enough. It progressively reveals the pattern, a starting point, the optimal direction, a talk track, and finally reference code.</p>
+                    </div>
+                    <button @click="startStuckMode()" class="shrink-0 px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700">Start</button>
+                  </div>
+                </div>
+
+                <div x-show="stuckRevealLevel>0" class="space-y-3">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <div class="text-sm font-semibold text-indigo-900">Stuck Mode</div>
+                      <div class="text-xs text-gray-500" x-text="stuckRevealLevel + '/' + stuckModeCards().length + ' reveals unlocked'"></div>
+                    </div>
+                    <button @click="revealNextStuckCard()" x-show="stuckRevealLevel < stuckModeCards().length" class="px-3 py-1.5 border border-indigo-200 rounded text-xs text-indigo-700 hover:bg-indigo-50">Reveal next step</button>
+                  </div>
+
+                  <template x-for="(card, i) in stuckModeCards().slice(0, stuckRevealLevel)" :key="card.title + i">
+                    <div class="rounded-lg border p-3" :class="card.code ? 'border-gray-200 bg-gray-50' : 'border-indigo-200 bg-indigo-50'">
+                      <div class="text-xs font-semibold mb-1" :class="card.code ? 'text-gray-700' : 'text-indigo-900'" x-text="card.title"></div>
+                      <template x-if="!card.code">
+                        <div class="text-sm whitespace-pre-line" :class="card.code ? 'text-gray-700' : 'text-indigo-800'" x-text="card.body"></div>
+                      </template>
+                      <template x-if="card.code">
+                        <pre class="text-xs font-mono whitespace-pre-wrap text-gray-700" x-text="card.body"></pre>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+          </div>{{-- /left pane scrollable --}}
+
+          {{-- Left pane bottom bar: step navigation --}}
+          <div class="shrink-0 border-t border-gray-200 bg-gray-50 px-4 py-2 flex items-center justify-between">
+            <button @click="prevStep()" x-show="currentStep > 0" class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-white">Back</button>
+            <div x-show="currentStep === 0"></div>
+            <div class="flex gap-2">
+              <button @click="startStuckMode()" x-show="currentStep < 9" class="px-3 py-1.5 border border-indigo-200 rounded-lg text-xs text-indigo-600 hover:bg-indigo-50">Stuck mode</button>
+              <button @click="skipStep()" x-show="currentStep < 9" class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-white">Skip</button>
+              <button @click="nextStep();practiceTab='steps'" x-show="currentStep < 9" class="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700">Next</button>
+              <button @click="finishPractice()" x-show="currentStep === 9" class="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700">Finish</button>
+            </div>
+          </div>
+        </div>{{-- /LEFT PANE --}}
+
+        {{-- RIGHT PANE: code editor + test runner --}}
+        <div class="lg:w-1/2 flex flex-col min-h-0 bg-white">
+
+          {{-- Editor header --}}
+          <div class="shrink-0 flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-gray-50">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+              <span class="text-xs font-semibold text-gray-600">Code</span>
+            </div>
+            <select x-model="stepData.solutionLanguage" @change="onSolutionLanguageChange()" class="text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:ring-1 focus:ring-indigo-500" :disabled="usePlainSolutionEditor">
+              <option value="python">Python</option>
+              <option value="javascript">JavaScript</option>
+            </select>
+          </div>
+
+          {{-- Editor --}}
+          <div class="flex-1 min-h-0 overflow-hidden" x-ref="aceOuter">
+            <template x-if="usePlainSolutionEditor">
+              <textarea x-model="stepData.solution" @input.debounce.500ms="saveBookmark()" spellcheck="false"
+                class="w-full h-full font-mono text-sm p-4 border-0 focus:ring-0 resize-none bg-white"
+                placeholder="// Write your solution here"></textarea>
+            </template>
+            <div x-show="!usePlainSolutionEditor" id="tip-ace-editor" style="width:100%;height:100%"></div>
+          </div>
+
+          {{-- Test runner panel --}}
+          <div class="shrink-0 border-t border-gray-200">
+            {{-- Signature + Run button --}}
+            <div class="px-4 py-2 bg-gray-50 flex items-center justify-between gap-3">
+              <div class="min-w-0" x-show="runnerConfig()">
+                <code class="text-xs font-mono text-indigo-700 truncate block" x-text="stepData.solutionLanguage==='python' ? runnerConfig()?.signature?.python : runnerConfig()?.signature?.js"></code>
+              </div>
+              <div class="min-w-0 text-xs text-gray-400" x-show="!runnerConfig()" x-text="currentQuestion?.runner?.note || 'No browser tests for this question yet'"></div>
+              <div class="flex gap-2 shrink-0">
+                <button @click="preloadPython()" x-show="runnerConfig() && stepData.solutionLanguage==='python' && !runner.pyReady" :disabled="runner.pyLoading"
+                  class="px-3 py-1.5 rounded text-xs border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 disabled:opacity-60">
+                  <span x-show="!runner.pyLoading">Load Python</span>
+                  <span x-show="runner.pyLoading">Loading…</span>
+                </button>
+                <button @click="runTests()" x-show="runnerConfig()" :disabled="runner.running || (stepData.solutionLanguage==='python' && runner.pyLoading)"
+                  class="px-4 py-1.5 rounded text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 flex items-center gap-1.5">
+                  <svg x-show="!runner.running && !(stepData.solutionLanguage==='python' && runner.pyLoading)" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/></svg>
+                  <span x-show="!runner.running && !(stepData.solutionLanguage==='python' && runner.pyLoading)">Run</span>
+                  <span x-show="runner.running">Running…</span>
+                  <span x-show="!runner.running && stepData.solutionLanguage==='python' && runner.pyLoading">Loading Python…</span>
+                </button>
+              </div>
+            </div>
+
+            {{-- Results --}}
+            <div class="max-h-72 overflow-y-auto">
+              <template x-if="runner.lastError">
+                <div class="px-4 py-3 text-xs text-red-700 bg-red-50 border-t border-red-100">
+                  <div x-text="runner.lastError"></div>
+                  <template x-if="runner.lastResult?.stdout">
+                    <pre class="mt-1 text-gray-600 whitespace-pre-wrap" x-text="runner.lastResult.stdout"></pre>
+                  </template>
+                </div>
+              </template>
+              <template x-if="runner.lastResult">
+                <div class="px-4 py-2 space-y-0">
+                  <div class="flex items-center justify-between py-2">
+                    <div>
+                      <div class="text-xs font-semibold" :class="runner.lastResult.ok ? 'text-emerald-700' : 'text-amber-700'"
+                        x-text="runner.lastResult.ok ? 'All tests passed' : (runner.lastResult.passed + '/' + runner.lastResult.total + ' passed')"></div>
+                      <div class="text-[11px] text-gray-400" x-show="runner.lastResult?.elapsedMs !== undefined"
+                        x-text="'Local runtime: ' + formatElapsedMs(runner.lastResult.elapsedMs)"></div>
+                    </div>
+                    <div class="text-xs text-gray-400 text-right">
+                      <div x-text="runner.lastLang"></div>
+                      <div class="text-[11px]" x-show="runner.lastLang==='python'">Measured in Pyodide</div>
+                    </div>
+                  </div>
+                  <template x-for="r in runner.lastResult.results" :key="r.index">
+                    <div class="border-t border-gray-100 py-2">
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide"
+                          :class="r.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'"
+                          x-text="r.ok ? 'PASS' : 'FAIL'"></span>
+                        <span class="text-xs text-gray-500" x-text="'Test ' + (r.index + 1)"></span>
+                        <span class="text-[11px] text-gray-400" x-show="r.elapsedMs !== undefined" x-text="formatElapsedMs(r.elapsedMs)"></span>
+                      </div>
+                      <div class="font-mono text-xs space-y-0.5 pl-1">
+                        <div><span class="text-gray-400 inline-block w-[4.5rem]">Input:</span><span class="text-gray-700" x-text="JSON.stringify(r.args)"></span></div>
+                        <div><span class="text-gray-400 inline-block w-[4.5rem]">Expected:</span><span class="text-gray-700" x-text="JSON.stringify(r.expected)"></span></div>
+                        <div>
+                          <span class="text-gray-400 inline-block w-[4.5rem]">Output:</span>
+                          <span :class="r.ok ? 'text-emerald-600' : 'text-red-600 font-medium'"
+                            x-text="r.runtimeError ? 'Error: ' + r.runtimeError : JSON.stringify(r.actual)"></span>
+                        </div>
+                        <template x-if="r.stdout">
+                          <div class="mt-1 bg-gray-50 rounded px-2 py-1 text-gray-600">
+                            <span class="text-gray-400">stdout:</span>
+                            <pre class="whitespace-pre-wrap mt-0.5" x-text="r.stdout"></pre>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>{{-- /RIGHT PANE --}}
+
+      </div>{{-- /split panes --}}
     </div>
   </template>
 </div>
+</template>
 
 {{-- ===== SOLUTION REVIEW VIEW ===== --}}
 <div x-show="view==='review'" x-transition class="space-y-6">
@@ -884,21 +937,24 @@
 
 {{-- ========================== SCRIPTS ========================== --}}
 @push('scripts')
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/ruby/ruby.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/go/go.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/php/php.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="/vendor/ace/ace.js"></script>
 <script>
 function techInterviewPrep(){return{
-view:'landing',currentQuestion:null,reviewQuestion:null,currentStep:0,hintsRevealed:0,
-showProblem:true,showStuckNudge:false,stuckTimerId:null,toast:null,
+view:'landing',currentQuestion:null,reviewQuestion:null,currentStep:0,hintsRevealed:0,stuckRevealLevel:0,
+practiceTab:'problem',showProblem:true,showStuckNudge:false,stuckTimerId:null,toast:null,
 usePlainSolutionEditor:false,
+runner:{
+  supported:false,
+  running:false,
+  lastLang:null,
+  lastResult:null,
+  lastError:null,
+  pyLoading:false,
+  pyReady:false,
+},
+_runner:{jsWorker:null,pyWorker:null,timeoutId:null,requestSeq:0,pending:{}},
 
-stepLabels:['Restate','Clarify','I/O/Constraints','Brute Force','Trade-offs','Optimal','Time O(?)','Space O(?)','Edge Cases','Code','Reflect'],
+stepLabels:['Restate','Clarify','I/O/Constraints','Brute Force','Trade-offs','Optimal','Time O(?)','Space O(?)','Edge Cases','Reflect'],
 mistakeCategories:['Missed pattern','Wrong time complexity','Wrong space complexity','Forgot edge cases','Brute force only','Coding bug','Logic bug','Incomplete explanation','Poor trade-off reasoning'],
 
 stepData:{useTemplates:true,restate:'',inputOutput:'',assumptions:'',inputs:'',outputs:'',constraints:'',bruteForce:'',bruteForceTC:'',tradeoffs:'',optimal:'',timeComplexity:'',spaceComplexity:'',edgeCases:'',solution:'',solutionLanguage:'python',notes:'',selectedPattern:'',mistakes:[],confidence:3,freeReflection:'',skippedSteps:[]},
@@ -925,12 +981,13 @@ get allCategories(){return[...new Set(this.questions.map(q=>q.category))].sort()
 get allPatterns(){return[...new Set(this.questions.flatMap(q=>q.patterns))].sort()},
 
 init(){
-  this.usePlainSolutionEditor=typeof CodeMirror==='undefined';
+  this.usePlainSolutionEditor=typeof ace==='undefined';
+  this.runner.supported=typeof Worker!=='undefined';
   this.loadData();
   this.updateStreak();
   this.stepData.useTemplates=this.user.prefs.templateMode==='template';
-  this.$watch('currentStep',()=>{this.syncSolutionEditor()});
   this.$watch('view',()=>{this.syncSolutionEditor()});
+  if(this.runner.supported)this.ensureJsRunner();
 },
 
 loadData(){try{const d=localStorage.getItem('tip_user');if(d)this.user={...this.user,...JSON.parse(d)}}catch(e){}},
@@ -946,6 +1003,35 @@ go(v){
 
 showToast(msg){this.toast=msg;setTimeout(()=>this.toast=null,2500)},
 encourage(){const m=['You\'ve now seen this pattern — next time you\'ll recognise it faster.','Every attempt builds pattern recognition. Keep going.','Mistakes are data, not failure. You\'re building intuition.','You just expanded your problem-solving toolkit.','This is how experts are made — one problem at a time.','The fact that you showed up today matters. Consistency beats intensity.','You\'re training your brain to see structure where others see chaos.'];return m[Math.floor(Math.random()*m.length)]},
+formatElapsedMs(ms){
+  if(ms===undefined||ms===null||Number.isNaN(ms))return 'n/a';
+  if(ms < 1)return ms.toFixed(3)+' ms';
+  if(ms < 10)return ms.toFixed(2)+' ms';
+  if(ms < 100)return ms.toFixed(1)+' ms';
+  return Math.round(ms)+' ms';
+},
+patternLabel(pattern){return (pattern||'').replace(/-/g,' ')},
+stuckModeCards(){
+  if(!this.currentQuestion)return [];
+  const q=this.currentQuestion;
+  const primaryPattern=this.patternLabel((q.patterns&&q.patterns[0])||'pattern');
+  const talkTrack=[
+    'Pattern: '+primaryPattern+'.',
+    'Brute force: '+q.bruteForce.approach,
+    'Optimal: '+q.optimal.approach,
+    'Why it works: '+q.solutionExplanation,
+    'Complexity: time '+q.optimal.timeComplexity+', space '+q.optimal.spaceComplexity+'.',
+    q.edgeCases&&q.edgeCases.length ? 'Edge cases to mention: '+q.edgeCases.slice(0,3).join(', ')+'.' : '',
+    q.followUps&&q.followUps.length ? 'Likely follow-ups: '+q.followUps.slice(0,2).join('; ')+'.' : '',
+  ].filter(Boolean).join('\n');
+  return [
+    {title:'1. Pattern signal',body:'Start by saying: "This looks like a '+primaryPattern+' problem."\n\nWhy: '+(q.patternQuiz?.summary||q.statement)},
+    {title:'2. Brute-force starting point',body:q.bruteForce.approach+'\n\nTime: '+q.bruteForce.timeComplexity+'\nSpace: '+q.bruteForce.spaceComplexity},
+    {title:'3. Optimal direction',body:q.optimal.approach+'\n\nTime: '+q.optimal.timeComplexity+'\nSpace: '+q.optimal.spaceComplexity},
+    {title:'4. How to explain it out loud',body:talkTrack},
+    {title:'5. Reference implementation',body:q.optimal.code,code:true},
+  ];
+},
 
 formatTime(s){const m=Math.floor(s/60),sec=s%60;return m+':'+(sec<10?'0':'')+sec},
 timerPct(){return this.practiceTimer.total?Math.round(this.practiceTimer.elapsed/this.practiceTimer.total*100):0},
@@ -969,26 +1055,57 @@ dismissStuckNudge(reason){this.showStuckNudge=false;if(reason==='thinking')this.
 // ===== PRACTICE =====
 startPractice(q){
   this.destroySolutionEditor();
-  this.currentQuestion=q;this.reviewQuestion=null;this.currentStep=0;this.hintsRevealed=0;
+  this.resetRunnerState();
+  this.currentQuestion=q;this.reviewQuestion=null;this.currentStep=0;this.hintsRevealed=0;this.stuckRevealLevel=0;this.practiceTab='problem';
   this.stepData={useTemplates:this.user.prefs.templateMode==='template',restate:'',inputOutput:'',assumptions:'',inputs:'',outputs:'',constraints:'',bruteForce:'',bruteForceTC:'',tradeoffs:'',optimal:'',timeComplexity:'',spaceComplexity:'',edgeCases:'',solution:'',solutionLanguage:'python',notes:'',selectedPattern:'',mistakes:[],confidence:3,freeReflection:'',skippedSteps:[]};
   this.practiceTimer={running:true,elapsed:0,total:q.recommendedTime*60,interval:null};
   this.practiceTimer.interval=setInterval(()=>{this.practiceTimer.elapsed++},1000);
   this.view='practice';
+  // Pre-fill function stub
+  this.$nextTick(()=>{
+    const stub=this.getStub(this.stepData.solutionLanguage);
+    if(stub)this.stepData.solution=stub;
+    // Auto-preload Python when it's the selected language
+    if(this.stepData.solutionLanguage==='python'&&this.runner.supported&&!this.runner.pyReady&&!this.runner.pyLoading)this.preloadPython();
+  });
   this.startStuckTimer();
   this.logSession('practice',q.id);
 },
 
-nextStep(){if(this.currentStep<10){this.currentStep++;this.startStuckTimer();this.saveBookmark()}},
+nextStep(){if(this.currentStep<9){this.currentStep++;this.startStuckTimer();this.saveBookmark()}},
 prevStep(){if(this.currentStep>0){this.currentStep--;this.startStuckTimer()}},
 skipStep(){this.stepData.skippedSteps.push(this.currentStep);this.nextStep()},
+startStuckMode(){
+  if(!this.currentQuestion)return;
+  this.showStuckNudge=false;
+  this.practiceTab='hints';
+  if(this.hintsRevealed===0)this.revealHint();
+  this.stuckRevealLevel=Math.max(this.stuckRevealLevel,1);
+  this.saveBookmark();
+},
+revealNextStuckCard(){
+  const total=this.stuckModeCards().length;
+  if(!this.currentQuestion||this.stuckRevealLevel>=total)return;
+  this.stuckRevealLevel++;
+  this.saveBookmark();
+},
 
-revealHint(){if(this.currentQuestion&&this.hintsRevealed<5)this.hintsRevealed++},
+revealHint(){
+  if(!(this.currentQuestion&&this.hintsRevealed<5))return;
+  this.hintsRevealed++;
+  this.saveBookmark();
+  this.$nextTick(()=>{
+    const el=this.$refs.hintsPanel;
+    if(!el||typeof el.scrollIntoView!=='function')return;
+    el.scrollIntoView({block:'nearest',behavior:'smooth'});
+  });
+},
 
 toggleMistake(m){const i=this.stepData.mistakes.indexOf(m);i>=0?this.stepData.mistakes.splice(i,1):this.stepData.mistakes.push(m)},
 
 saveBookmark(){
   if(!this.currentQuestion)return;
-  this.user.bookmark={questionId:this.currentQuestion.id,step:this.currentStep,stepData:{...this.stepData},hintsRevealed:this.hintsRevealed,elapsed:this.practiceTimer.elapsed};
+  this.user.bookmark={questionId:this.currentQuestion.id,step:this.currentStep,stepData:{...this.stepData},hintsRevealed:this.hintsRevealed,stuckRevealLevel:this.stuckRevealLevel,elapsed:this.practiceTimer.elapsed};
   this.saveData();
 },
 
@@ -996,80 +1113,251 @@ resumeBookmark(){
   if(!this.user.bookmark)return;
   const q=this.getQ(this.user.bookmark.questionId);if(!q)return;
   this.destroySolutionEditor();
-  this.currentQuestion=q;this.currentStep=this.user.bookmark.step;
+  this.resetRunnerState();
+  this.currentQuestion=q;this.currentStep=Math.min(this.user.bookmark.step,this.stepLabels.length-1);
   this.stepData={...this.stepData,...this.user.bookmark.stepData};
   if(!this.stepData.solutionLanguage)this.stepData.solutionLanguage='python';
   this.hintsRevealed=this.user.bookmark.hintsRevealed||0;
+  this.stuckRevealLevel=this.user.bookmark.stuckRevealLevel||0;
   this.practiceTimer={running:true,elapsed:this.user.bookmark.elapsed||0,total:q.recommendedTime*60,interval:null};
   this.practiceTimer.interval=setInterval(()=>{this.practiceTimer.elapsed++},1000);
   this.view='practice';this.startStuckTimer();
 },
 
-destroySolutionEditor(){
-  if(!this._solutionCm)return;
-  try{
-    this.stepData.solution=this._solutionCm.getValue();
-    this._solutionCm.toTextArea();
-  }catch(e){}
-  this._solutionCm=null;
+resetRunnerState(){
+  this.runner.running=false;
+  this.runner.lastLang=null;
+  this.runner.lastResult=null;
+  this.runner.lastError=null;
 },
 
-cmModeForLang(lang){
-  const map={
-    javascript:'javascript',
-    typescript:'javascript',
-    python:'python',
-    java:'text/x-java',
-    cpp:'text/x-c++src',
-    csharp:'text/x-csharp',
-    go:'go',
-    ruby:'ruby',
-    php:'php',
-    sql:'text/x-sql',
-    plaintext:null
-  };
-  return Object.prototype.hasOwnProperty.call(map,lang)?map[lang]:'python';
+runnerConfig(){
+  return this.currentQuestion && this.currentQuestion.runner && this.currentQuestion.runner.enabled ? this.currentQuestion.runner : null;
+},
+
+getStub(lang){
+  const cfg=this.runnerConfig();
+  if(!cfg)return '';
+  const isJs=(lang==='javascript'||lang==='typescript');
+  const isPy=(lang==='python');
+  if(isJs&&cfg.entry.js){
+    const sig=cfg.signature.js||('function '+cfg.entry.js+'()');
+    const name=cfg.entry.js;
+    const params=sig.replace(/^function\s+\w+\s*/,'').replace(/\s*->.*$/,'');
+    return 'function '+name+params+' {\n  // your code here\n  \n}\n';
+  }
+  if(isPy&&cfg.entry.python){
+    const sig=cfg.signature.python||('def '+cfg.entry.python+'()');
+    const parts=sig.match(/^def\s+(\w+)\s*(\([^)]*\))(.*)$/);
+    if(parts){
+      const ret=parts[3]?parts[3].trim():'';
+      return 'def '+parts[1]+parts[2]+(ret?' '+ret:'')+':\n    # your code here\n    pass\n';
+    }
+    return 'def '+cfg.entry.python+'():\n    # your code here\n    pass\n';
+  }
+  return '';
+},
+
+isStubCode(code){
+  if(!code)return true;
+  const stripped=code.replace(/\/\/.*|#.*/g,'').replace(/\b(pass|return)\b/g,'').replace(/function\s+\w+\s*\([^)]*\)\s*\{?\s*\}?/g,'').replace(/def\s+\w+\s*\([^)]*\)[^:]*:\s*/g,'').trim();
+  return stripped.length===0;
+},
+
+ensureJsRunner(){
+  if(!this.runner.supported)return null;
+  if(this._runner.jsWorker)return this._runner.jsWorker;
+  try{
+    this._runner.jsWorker=new Worker('/js/tip-js-runner.worker.js');
+    this._runner.jsWorker.onmessage=(ev)=>this.onRunnerMessage('js',ev);
+    return this._runner.jsWorker;
+  }catch(e){
+    this.runner.lastError='Could not start JavaScript runner.';
+    return null;
+  }
+},
+
+ensurePyRunner(){
+  if(!this.runner.supported)return null;
+  if(this._runner.pyWorker)return this._runner.pyWorker;
+  try{
+    this._runner.pyWorker=new Worker('/js/tip-py-runner.worker.js');
+    this._runner.pyWorker.onmessage=(ev)=>this.onRunnerMessage('python',ev);
+    return this._runner.pyWorker;
+  }catch(e){
+    this.runner.lastError='Could not start Python runner.';
+    return null;
+  }
+},
+
+preloadPython(){
+  if(!this.runner.supported)return;
+  if(this.runner.pyReady||this.runner.pyLoading)return;
+  const w=this.ensurePyRunner();
+  if(!w)return;
+  const requestId='py_preload_'+(++this._runner.requestSeq);
+  this.runner.pyLoading=true;
+  w.postMessage({type:'preload',requestId});
+},
+
+onRunnerMessage(kind,ev){
+  const msg=ev.data||{};
+  if(msg.type==='preloadResult'){
+    this.runner.pyLoading=false;
+    if(msg.ok)this.runner.pyReady=true;
+    if(!msg.ok)this.runner.lastError=msg.error||'Failed to load Python runtime.';
+    return;
+  }
+  if(msg.type!=='result')return;
+  const req=this._runner.pending[msg.requestId];
+  if(!req)return;
+  delete this._runner.pending[msg.requestId];
+  if(this._runner.timeoutId){clearTimeout(this._runner.timeoutId);this._runner.timeoutId=null;}
+  this.runner.running=false;
+  this.runner.lastLang=req.lang;
+  if(msg.payload&&msg.payload.ok!==undefined){
+    this.runner.lastResult=msg.payload;
+    this.runner.lastError=msg.payload.ok?null:(msg.payload.error||null);
+  }else{
+    this.runner.lastResult=null;
+    this.runner.lastError='Runner returned an unexpected response.';
+  }
+},
+
+killRunner(which){
+  try{
+    if(which==='js'&&this._runner.jsWorker){this._runner.jsWorker.terminate();this._runner.jsWorker=null;}
+    if(which==='python'&&this._runner.pyWorker){this._runner.pyWorker.terminate();this._runner.pyWorker=null;}
+  }catch(e){}
+},
+
+runTests(){
+  this.resetRunnerState();
+  const cfg=this.runnerConfig();
+  if(!cfg){this.runner.lastError='No runnable tests are defined for this question yet.';return;}
+  if(!this.runner.supported){this.runner.lastError='Your browser does not support background workers, so in-browser tests are unavailable.';return;}
+  const lang=this.stepData.solutionLanguage;
+  const isJs=(lang==='javascript'||lang==='typescript');
+  const isPy=(lang==='python');
+  if(!isJs&&!isPy){this.runner.lastError='Choose JavaScript or Python to run tests.';return;}
+
+  const entryName=isJs?cfg.entry.js:cfg.entry.python;
+  if(!entryName){this.runner.lastError='Missing runner entry point for this language.';return;}
+
+  const code=(this.stepData.solution||'').trim();
+  if(!code){this.runner.lastError='Paste or write a solution first.';return;}
+
+  this.runner.running=true;
+  const requestId=(isJs?'js_':'py_')+(++this._runner.requestSeq);
+  this._runner.pending[requestId]={lang:isJs?'javascript':'python'};
+
+  const payload=JSON.parse(JSON.stringify({code,entryName,tests:cfg.tests||[]}));
+  if(isJs){
+    const w=this.ensureJsRunner();
+    if(!w){this.runner.running=false;return;}
+    w.postMessage({type:'run',requestId,payload});
+    this._runner.timeoutId=setTimeout(()=>{this.runner.running=false;this.runner.lastError='Timed out running JavaScript tests.';this.killRunner('js');this.ensureJsRunner();},4000);
+    return;
+  }
+
+  if(isPy){
+    const w=this.ensurePyRunner();
+    if(!w){this.runner.running=false;return;}
+    if(!this.runner.pyReady&&!this.runner.pyLoading)this.preloadPython();
+    w.postMessage({type:'run',requestId,payload});
+    this._runner.timeoutId=setTimeout(()=>{this.runner.running=false;this.runner.lastError='Timed out running Python tests. (First load can take a bit.)';this.killRunner('python');},20000);
+  }
+},
+
+destroySolutionEditor(){
+  if(this._aceResizeHandler){window.removeEventListener('resize',this._aceResizeHandler);this._aceResizeHandler=null;}
+  if(!this._aceEditor)return;
+  try{
+    this.stepData.solution=this._aceEditor.getValue();
+    this._aceEditor.destroy();
+    const el=document.getElementById('tip-ace-editor');
+    if(el)el.innerHTML='';
+  }catch(e){}
+  this._aceEditor=null;
+},
+
+aceModeForLang(lang){
+  if(lang==='javascript'||lang==='typescript')return 'ace/mode/javascript';
+  if(lang==='python')return 'ace/mode/python';
+  return 'ace/mode/python';
 },
 
 syncSolutionEditor(){
   if(this.usePlainSolutionEditor)return;
-  if(typeof CodeMirror==='undefined')return;
-  if(this.view!=='practice'||this.currentStep!==9){
+  if(typeof ace==='undefined')return;
+  if(this.view!=='practice'){
     this.destroySolutionEditor();
     return;
   }
-  this.$nextTick(()=>{
-    const ta=this.$refs.solutionTextarea;
-    if(!ta)return;
-    if(this._solutionCm)return;
-    const mode=this.cmModeForLang(this.stepData.solutionLanguage||'python');
-    this._solutionCm=CodeMirror.fromTextArea(ta,{
-      lineNumbers:true,
-      mode:mode,
-      indentUnit:4,
-      tabSize:4,
-      indentWithTabs:false,
-      lineWrapping:true,
-      viewportMargin:50,
-    });
-    this._solutionCm.setValue(this.stepData.solution||'');
+  setTimeout(()=>{
+    const container=document.getElementById('tip-ace-editor');
+    if(!container)return;
+    if(this._aceEditor)return;
+    // Set explicit pixel height from parent
+    const outer=this.$refs.aceOuter;
+    if(outer)container.style.height=Math.max(200,outer.offsetHeight)+'px';
+    const lang=this.stepData.solutionLanguage||'python';
+    try{
+      ace.config.set('basePath','/vendor/ace');
+      const editor=ace.edit(container);
+      editor.setTheme('ace/theme/chrome');
+      editor.session.setMode(this.aceModeForLang(lang));
+      editor.setOptions({
+        fontSize:'13px',
+        showGutter:true,
+        tabSize:4,
+        useSoftTabs:true,
+        wrap:true,
+        showPrintMargin:false,
+        highlightActiveLine:true,
+      });
+      this._aceEditor=editor;
+    }catch(e){
+      console.warn('Ace init failed, falling back to plain textarea',e);
+      this.usePlainSolutionEditor=true;
+      return;
+    }
+    const initVal=this.stepData.solution||(this.getStub(lang));
+    if(!this.stepData.solution&&initVal)this.stepData.solution=initVal;
+    this._aceEditor.setValue(initVal||'',-1);
     let saveT;
-    this._solutionCm.on('change',()=>{
-      this.stepData.solution=this._solutionCm.getValue();
+    this._aceEditor.session.on('change',()=>{
+      this.stepData.solution=this._aceEditor.getValue();
       clearTimeout(saveT);
       saveT=setTimeout(()=>this.saveBookmark(),500);
     });
-    const h=Math.min(440,Math.max(280,Math.floor(window.innerHeight*0.42)));
-    this._solutionCm.setSize(null,h);
-  });
+    this._aceResizeHandler=()=>{
+      if(!this._aceEditor)return;
+      if(outer)container.style.height=Math.max(200,outer.offsetHeight)+'px';
+      this._aceEditor.resize();
+    };
+    window.addEventListener('resize',this._aceResizeHandler);
+    setTimeout(()=>{if(this._aceEditor)this._aceEditor.resize()},50);
+  },200);
 },
 
 onSolutionLanguageChange(){
-  if(this._solutionCm){
+  const lang=this.stepData.solutionLanguage||'python';
+  if(this._aceEditor){
     try{
-      this._solutionCm.setOption('mode',this.cmModeForLang(this.stepData.solutionLanguage||'python'));
+      this._aceEditor.session.setMode(this.aceModeForLang(lang));
     }catch(e){}
   }
+  // Swap stub if user hasn't written real code yet
+  if(this.isStubCode(this.stepData.solution)){
+    const stub=this.getStub(lang);
+    if(stub){
+      this.stepData.solution=stub;
+      if(this._aceEditor)this._aceEditor.setValue(stub,-1);
+    }
+  }
+  // Auto-preload Python when switching to it
+  if(lang==='python'&&this.runner.supported&&!this.runner.pyReady&&!this.runner.pyLoading)this.preloadPython();
   this.saveBookmark();
 },
 
@@ -1311,7 +1599,7 @@ resetData(){
 
 // ===== KEYBOARD =====
 handleKey(e){
-  if(e.target.closest&&e.target.closest('.CodeMirror'))return;
+  if(e.target.closest&&e.target.closest('.ace_editor'))return;
   if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT')return;
   if(this.view==='practice'){
     if(e.key==='h'||e.key==='H')this.revealHint();
@@ -1327,6 +1615,16 @@ questions:[
 {id:1,title:'Two Sum',difficulty:'easy',category:'arrays',patterns:['hash-map'],cognitiveLoad:'low',recommendedTime:15,
 statement:'Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.\n\nYou may assume that each input would have exactly one solution, and you may not use the same element twice.',
 examples:[{input:'nums = [2,7,11,15], target = 9',output:'[0,1]',explanation:'Because nums[0] + nums[1] == 9'}],
+runner:{
+  enabled:true,
+  signature:{js:'function twoSum(nums, target) -> number[]',python:'def two_sum(nums, target) -> list[int]'},
+  entry:{js:'twoSum',python:'two_sum'},
+  tests:[
+    {args:[[2,7,11,15],9],expected:[0,1],comparator:'unorderedArray'},
+    {args:[[3,2,4],6],expected:[1,2],comparator:'unorderedArray'},
+    {args:[[3,3],6],expected:[0,1],comparator:'unorderedArray'}
+  ]
+},
 commonMistakes:['Using the same element twice','Not handling negative numbers','Returning values instead of indices'],
 discussionPoints:['Hash map for O(1) lookups','Single-pass vs two-pass','What if sorted? (two pointers)'],
 bruteForce:{approach:'Check every pair of numbers using two nested loops.',timeComplexity:'O(n²)',spaceComplexity:'O(1)',code:'for i in range(len(nums)):\n  for j in range(i+1, len(nums)):\n    if nums[i] + nums[j] == target:\n      return [i, j]'},
@@ -1340,6 +1638,18 @@ patternQuiz:{summary:'Given an array of numbers, find two that sum to a target v
 {id:2,title:'Valid Parentheses',difficulty:'easy',category:'stacks',patterns:['stack'],cognitiveLoad:'low',recommendedTime:10,
 statement:'Given a string s containing just the characters \'(\', \')\', \'{\', \'}\', \'[\' and \']\', determine if the input string is valid.\n\nAn input string is valid if:\n1. Open brackets must be closed by the same type of brackets.\n2. Open brackets must be closed in the correct order.\n3. Every close bracket has a corresponding open bracket of the same type.',
 examples:[{input:'s = "()"',output:'true',explanation:''},{input:'s = "([)]"',output:'false',explanation:'Brackets are not closed in correct order'}],
+runner:{
+  enabled:true,
+  signature:{js:'function isValid(s) -> boolean',python:'def is_valid(s) -> bool'},
+  entry:{js:'isValid',python:'is_valid'},
+  tests:[
+    {args:['()'],expected:true,comparator:'strictEqual'},
+    {args:['()[]{}'],expected:true,comparator:'strictEqual'},
+    {args:['(]'],expected:false,comparator:'strictEqual'},
+    {args:['([)]'],expected:false,comparator:'strictEqual'},
+    {args:['{[]}'],expected:true,comparator:'strictEqual'}
+  ]
+},
 commonMistakes:['Forgetting to check stack is empty at the end','Not handling the case where stack is empty but we get a closing bracket','Only checking one type of bracket'],
 discussionPoints:['LIFO property of stacks','Matching pairs','Early termination'],
 bruteForce:{approach:'Repeatedly scan the string and remove matching adjacent pairs until no more can be removed.',timeComplexity:'O(n²)',spaceComplexity:'O(n)',code:'while "()" in s or "[]" in s or "{}" in s:\n  s = s.replace("()", "").replace("[]", "").replace("{}", "")\nreturn len(s) == 0'},
@@ -1353,6 +1663,16 @@ patternQuiz:{summary:'Check if a string of brackets is properly nested and match
 {id:3,title:'Best Time to Buy and Sell Stock',difficulty:'easy',category:'arrays',patterns:['greedy'],cognitiveLoad:'low',recommendedTime:15,
 statement:'You are given an array prices where prices[i] is the price of a given stock on the ith day.\n\nYou want to maximize your profit by choosing a single day to buy and a single day to sell in the future. Return the maximum profit. If no profit is possible, return 0.',
 examples:[{input:'prices = [7,1,5,3,6,4]',output:'5',explanation:'Buy on day 2 (price=1), sell on day 5 (price=6), profit=5'}],
+runner:{
+  enabled:true,
+  signature:{js:'function maxProfit(prices) -> number',python:'def max_profit(prices) -> int'},
+  entry:{js:'maxProfit',python:'max_profit'},
+  tests:[
+    {args:[[7,1,5,3,6,4]],expected:5,comparator:'strictEqual'},
+    {args:[[7,6,4,3,1]],expected:0,comparator:'strictEqual'},
+    {args:[[2,4,1]],expected:2,comparator:'strictEqual'}
+  ]
+},
 commonMistakes:['Trying to sell before buying','Not tracking the minimum price seen so far','Using nested loops when a single pass suffices'],
 discussionPoints:['Greedy approach: track running minimum','Why we can\'t just find max and min','The constraint that buy must come before sell'],
 bruteForce:{approach:'Check every pair where buy day < sell day.',timeComplexity:'O(n²)',spaceComplexity:'O(1)',code:'max_profit = 0\nfor i in range(len(prices)):\n  for j in range(i+1, len(prices)):\n    max_profit = max(max_profit, prices[j]-prices[i])\nreturn max_profit'},
@@ -1366,6 +1686,10 @@ patternQuiz:{summary:'Find the maximum profit from one buy-sell transaction on a
 {id:4,title:'Maximum Depth of Binary Tree',difficulty:'easy',category:'trees',patterns:['dfs'],cognitiveLoad:'low',recommendedTime:10,
 statement:'Given the root of a binary tree, return its maximum depth.\n\nA binary tree\'s maximum depth is the number of nodes along the longest path from the root node down to the farthest leaf node.',
 examples:[{input:'root = [3,9,20,null,null,15,7]',output:'3',explanation:'The tree has depth 3'}],
+runner:{
+  enabled:false,
+  note:'Tree problems require a tree data structure — use the guided steps to practice.'
+},
 commonMistakes:['Off-by-one error (counting edges vs nodes)','Not handling null root','Forgetting to take the max of left and right'],
 discussionPoints:['DFS vs BFS approach','Recursive vs iterative','Base case handling'],
 bruteForce:{approach:'Same as optimal — DFS recursion is already clean and efficient.',timeComplexity:'O(n)',spaceComplexity:'O(h) where h is height',code:'def maxDepth(root):\n  if not root:\n    return 0\n  return 1 + max(maxDepth(root.left), maxDepth(root.right))'},
@@ -1379,6 +1703,17 @@ patternQuiz:{summary:'Find the maximum depth (longest root-to-leaf path) of a bi
 {id:5,title:'Climbing Stairs',difficulty:'easy',category:'dynamic-programming',patterns:['dp'],cognitiveLoad:'low',recommendedTime:15,
 statement:'You are climbing a staircase. It takes n steps to reach the top. Each time you can either climb 1 or 2 steps. In how many distinct ways can you climb to the top?',
 examples:[{input:'n = 3',output:'3',explanation:'1+1+1, 1+2, 2+1'},{input:'n = 2',output:'2',explanation:'1+1, 2'}],
+runner:{
+  enabled:true,
+  signature:{js:'function climbStairs(n) -> number',python:'def climb_stairs(n) -> int'},
+  entry:{js:'climbStairs',python:'climb_stairs'},
+  tests:[
+    {args:[2],expected:2,comparator:'strictEqual'},
+    {args:[3],expected:3,comparator:'strictEqual'},
+    {args:[1],expected:1,comparator:'strictEqual'},
+    {args:[5],expected:8,comparator:'strictEqual'}
+  ]
+},
 commonMistakes:['Not recognizing it as Fibonacci','Using exponential recursion without memoization','Off-by-one on base cases'],
 discussionPoints:['Fibonacci connection','Top-down vs bottom-up DP','Space optimization to O(1)'],
 bruteForce:{approach:'Recursive: ways(n) = ways(n-1) + ways(n-2).',timeComplexity:'O(2^n)',spaceComplexity:'O(n)',code:'def climb(n):\n  if n <= 2: return n\n  return climb(n-1) + climb(n-2)'},
@@ -1392,6 +1727,10 @@ patternQuiz:{summary:'Count the number of distinct ways to climb n stairs taking
 {id:6,title:'Reverse Linked List',difficulty:'easy',category:'linked-lists',patterns:['linked-list'],cognitiveLoad:'low',recommendedTime:15,
 statement:'Given the head of a singly linked list, reverse the list, and return the reversed list.',
 examples:[{input:'head = [1,2,3,4,5]',output:'[5,4,3,2,1]',explanation:''}],
+runner:{
+  enabled:false,
+  note:'Linked list problems require a linked list data structure — use the guided steps to practice.'
+},
 commonMistakes:['Losing the reference to the next node','Not updating the head pointer','Forgetting to set the original head\'s next to null'],
 discussionPoints:['Iterative vs recursive','In-place reversal','Pointer manipulation'],
 bruteForce:{approach:'Store values in array, then create new reversed list.',timeComplexity:'O(n)',spaceComplexity:'O(n)',code:'values = []\nwhile head:\n  values.append(head.val)\n  head = head.next\n# rebuild in reverse'},
@@ -1405,6 +1744,17 @@ patternQuiz:{summary:'Reverse a singly linked list and return the new head.',cor
 {id:7,title:'Binary Search',difficulty:'easy',category:'searching',patterns:['binary-search'],cognitiveLoad:'low',recommendedTime:10,
 statement:'Given a sorted array of integers nums and an integer target, return the index of the target if found, or -1 if not found. You must write an algorithm with O(log n) runtime complexity.',
 examples:[{input:'nums = [-1,0,3,5,9,12], target = 9',output:'4',explanation:''},{input:'nums = [-1,0,3,5,9,12], target = 2',output:'-1',explanation:''}],
+runner:{
+  enabled:true,
+  signature:{js:'function search(nums, target) -> number',python:'def search(nums, target) -> int'},
+  entry:{js:'search',python:'search'},
+  tests:[
+    {args:[[-1,0,3,5,9,12],9],expected:4,comparator:'strictEqual'},
+    {args:[[-1,0,3,5,9,12],2],expected:-1,comparator:'strictEqual'},
+    {args:[[5],5],expected:0,comparator:'strictEqual'},
+    {args:[[1,2,3,4,5,6,7],1],expected:0,comparator:'strictEqual'}
+  ]
+},
 commonMistakes:['Off-by-one errors in left/right boundaries','Infinite loop from incorrect mid calculation','Not handling empty array'],
 discussionPoints:['Left-closed right-closed vs left-closed right-open','Integer overflow in mid calculation','Invariant maintenance'],
 bruteForce:{approach:'Linear scan through the array.',timeComplexity:'O(n)',spaceComplexity:'O(1)',code:'for i in range(len(nums)):\n  if nums[i] == target:\n    return i\nreturn -1'},
@@ -1418,6 +1768,16 @@ patternQuiz:{summary:'Find a target value\'s index in a sorted array efficiently
 {id:8,title:'Single Number',difficulty:'easy',category:'bit-manipulation',patterns:['bit-manipulation'],cognitiveLoad:'low',recommendedTime:10,
 statement:'Given a non-empty array of integers nums, every element appears twice except for one. Find that single one. You must implement a solution with linear runtime and constant extra space.',
 examples:[{input:'nums = [2,2,1]',output:'1',explanation:''},{input:'nums = [4,1,2,1,2]',output:'4',explanation:''}],
+runner:{
+  enabled:true,
+  signature:{js:'function singleNumber(nums) -> number',python:'def single_number(nums) -> int'},
+  entry:{js:'singleNumber',python:'single_number'},
+  tests:[
+    {args:[[2,2,1]],expected:1,comparator:'strictEqual'},
+    {args:[[4,1,2,1,2]],expected:4,comparator:'strictEqual'},
+    {args:[[1]],expected:1,comparator:'strictEqual'}
+  ]
+},
 commonMistakes:['Using a hash set (O(n) space, not constant)','Not knowing XOR properties','Trying to sort (O(n log n), not linear)'],
 discussionPoints:['XOR properties: a^a=0, a^0=a','Why sorting doesn\'t meet the constraints','Math approach: 2*sum(set) - sum(array)'],
 bruteForce:{approach:'Use a hash set: add if not seen, remove if already there. The remaining element is the answer.',timeComplexity:'O(n)',spaceComplexity:'O(n)',code:'seen = set()\nfor n in nums:\n  if n in seen: seen.remove(n)\n  else: seen.add(n)\nreturn seen.pop()'},
@@ -1431,6 +1791,17 @@ patternQuiz:{summary:'Find the one element that appears only once in an array wh
 {id:9,title:'Longest Substring Without Repeating Characters',difficulty:'medium',category:'strings',patterns:['sliding-window'],cognitiveLoad:'medium',recommendedTime:20,
 statement:'Given a string s, find the length of the longest substring without repeating characters.',
 examples:[{input:'s = "abcabcbb"',output:'3',explanation:'The answer is "abc"'},{input:'s = "bbbbb"',output:'1',explanation:'The answer is "b"'}],
+runner:{
+  enabled:true,
+  signature:{js:'function lengthOfLongestSubstring(s) -> number',python:'def length_of_longest_substring(s) -> int'},
+  entry:{js:'lengthOfLongestSubstring',python:'length_of_longest_substring'},
+  tests:[
+    {args:['abcabcbb'],expected:3,comparator:'strictEqual'},
+    {args:['bbbbb'],expected:1,comparator:'strictEqual'},
+    {args:['pwwkew'],expected:3,comparator:'strictEqual'},
+    {args:[''],expected:0,comparator:'strictEqual'}
+  ]
+},
 commonMistakes:['Confusing substring with subsequence','Not moving the left pointer correctly on duplicate','Using a set instead of a map (map stores positions for faster jumps)'],
 discussionPoints:['Sliding window technique','Set vs map for tracking characters','When to shrink the window'],
 bruteForce:{approach:'Check every substring for uniqueness.',timeComplexity:'O(n³)',spaceComplexity:'O(n)',code:'max_len = 0\nfor i in range(len(s)):\n  for j in range(i, len(s)):\n    if len(set(s[i:j+1])) == j-i+1:\n      max_len = max(max_len, j-i+1)\nreturn max_len'},
@@ -1442,12 +1813,22 @@ solutionExplanation:'The sliding window approach maintains a window [left, right
 patternQuiz:{summary:'Find the length of the longest substring where no character repeats.',correct:'sliding-window',distractors:['two-pointers','dp','hash-map']}},
 
 {id:10,title:'3Sum',difficulty:'medium',category:'arrays',patterns:['two-pointers'],cognitiveLoad:'medium',recommendedTime:25,
-statement:'Given an integer array nums, return all the triplets [nums[i], nums[j], nums[k]] such that i != j, i != k, and j != k, and nums[i] + nums[j] + nums[k] == 0.\n\nThe solution set must not contain duplicate triplets.',
+statement:'Given an integer array nums, return all the triplets [nums[i], nums[j], nums[k]] such that i != j, i != k, and j != k, and nums[i] + nums[j] + nums[k] == 0.\n\nThe solution set must not contain duplicate triplets. You may return the triplets in any order.',
 examples:[{input:'nums = [-1,0,1,2,-1,-4]',output:'[[-1,-1,2],[-1,0,1]]',explanation:''}],
+runner:{
+  enabled:true,
+  signature:{js:'function threeSum(nums) -> number[][]',python:'def three_sum(nums) -> list[list[int]]'},
+  entry:{js:'threeSum',python:'three_sum'},
+  tests:[
+    {args:[[-1,0,1,2,-1,-4]],expected:[[-1,-1,2],[-1,0,1]],comparator:'unorderedArray'},
+    {args:[[0,0,0]],expected:[[0,0,0]],comparator:'unorderedArray'},
+    {args:[[0,1,1]],expected:[],comparator:'unorderedArray'}
+  ]
+},
 commonMistakes:['Not handling duplicates (returning duplicate triplets)','Not sorting first','Using three nested loops O(n³)'],
 discussionPoints:['Sorting enables two-pointer technique','Duplicate skipping strategy','Reducing from 3-sum to 2-sum'],
-bruteForce:{approach:'Three nested loops checking all triplets.',timeComplexity:'O(n³)',spaceComplexity:'O(1)',code:'result = set()\nfor i for j for k:\n  if nums[i]+nums[j]+nums[k]==0:\n    result.add(tuple(sorted([nums[i],nums[j],nums[k]])))'},
-optimal:{approach:'Sort array. For each element, use two pointers on the remaining array to find pairs that sum to its negation. Skip duplicates.',timeComplexity:'O(n²)',spaceComplexity:'O(1) extra',code:'nums.sort()\nresult = []\nfor i in range(len(nums)-2):\n  if i > 0 and nums[i] == nums[i-1]: continue\n  lo, hi = i+1, len(nums)-1\n  while lo < hi:\n    total = nums[i] + nums[lo] + nums[hi]\n    if total < 0: lo += 1\n    elif total > 0: hi -= 1\n    else:\n      result.append([nums[i],nums[lo],nums[hi]])\n      while lo<hi and nums[lo]==nums[lo+1]: lo+=1\n      while lo<hi and nums[hi]==nums[hi-1]: hi-=1\n      lo+=1; hi-=1'},
+bruteForce:{approach:'Three nested loops checking all triplets, storing sorted triplets in a set to avoid duplicates.',timeComplexity:'O(n³)',spaceComplexity:'O(k) for the unique triplets returned',code:'result = set()\nn = len(nums)\nfor i in range(n - 2):\n  for j in range(i + 1, n - 1):\n    for k in range(j + 1, n):\n      if nums[i] + nums[j] + nums[k] == 0:\n        result.add(tuple(sorted([nums[i], nums[j], nums[k]])))\nreturn [list(triplet) for triplet in result]'},
+optimal:{approach:'Sort array. For each element, use two pointers on the remaining array to find pairs that sum to its negation. Skip duplicates.',timeComplexity:'O(n²)',spaceComplexity:'O(1) extra (excluding output)',code:'nums.sort()\nresult = []\nfor i in range(len(nums)-2):\n  if i > 0 and nums[i] == nums[i-1]:\n    continue\n  lo, hi = i+1, len(nums)-1\n  while lo < hi:\n    total = nums[i] + nums[lo] + nums[hi]\n    if total < 0:\n      lo += 1\n    elif total > 0:\n      hi -= 1\n    else:\n      result.append([nums[i], nums[lo], nums[hi]])\n      while lo < hi and nums[lo] == nums[lo+1]:\n        lo += 1\n      while lo < hi and nums[hi] == nums[hi-1]:\n        hi -= 1\n      lo += 1\n      hi -= 1\nreturn result'},
 hints:['Sorting the array opens up new approaches.','For each number, you need two others that sum to its negation.','Two pointers from both ends of the remaining sorted array.','Skip duplicates for both the outer loop and inner pointers.','Time: O(n²) total.'],
 edgeCases:['Array with fewer than 3 elements','All zeros','All positive or all negative','Many duplicates'],
 followUps:['What about 4Sum?','What about closest 3Sum?','Can you generalize to kSum?'],
@@ -1457,9 +1838,19 @@ patternQuiz:{summary:'Find all unique triplets in an array that sum to zero.',co
 {id:11,title:'Merge Intervals',difficulty:'medium',category:'intervals',patterns:['merge-intervals'],cognitiveLoad:'medium',recommendedTime:20,
 statement:'Given an array of intervals where intervals[i] = [starti, endi], merge all overlapping intervals, and return an array of the non-overlapping intervals that cover all the intervals in the input.',
 examples:[{input:'intervals = [[1,3],[2,6],[8,10],[15,18]]',output:'[[1,6],[8,10],[15,18]]',explanation:'Intervals [1,3] and [2,6] overlap, merged to [1,6]'}],
-commonMistakes:['Forgetting to sort by start time first','Not handling contained intervals','Edge case where intervals touch but don\'t overlap'],
+runner:{
+  enabled:true,
+  signature:{js:'function merge(intervals) -> number[][]',python:'def merge(intervals) -> list[list[int]]'},
+  entry:{js:'merge',python:'merge'},
+  tests:[
+    {args:[[[1,3],[2,6],[8,10],[15,18]]],expected:[[1,6],[8,10],[15,18]],comparator:'deepEqual'},
+    {args:[[[1,4],[4,5]]],expected:[[1,5]],comparator:'deepEqual'},
+    {args:[[[1,4],[0,4]]],expected:[[0,4]],comparator:'deepEqual'}
+  ]
+},
+commonMistakes:['Forgetting to sort by start time first','Not handling contained intervals','Missing that intervals touching at endpoints should merge in this problem'],
 discussionPoints:['Sort by start time first','Merge condition: current start <= previous end','Updating the end with max(prev end, current end)'],
-bruteForce:{approach:'Sort, then repeatedly scan for overlaps (multiple passes).',timeComplexity:'O(n² log n)',spaceComplexity:'O(n)',code:'Sort and repeatedly merge until no changes'},
+bruteForce:{approach:'Sort once, then repeatedly scan and merge until no overlaps remain.',timeComplexity:'O(n²)',spaceComplexity:'O(n)',code:'Sort the intervals, scan for one merge at a time, and repeat until no intervals change.'},
 optimal:{approach:'Sort by start time. Iterate and merge: if current interval overlaps the last merged interval, extend it; otherwise add as new.',timeComplexity:'O(n log n)',spaceComplexity:'O(n)',code:'intervals.sort(key=lambda x: x[0])\nmerged = [intervals[0]]\nfor start, end in intervals[1:]:\n  if start <= merged[-1][1]:\n    merged[-1][1] = max(merged[-1][1], end)\n  else:\n    merged.append([start, end])\nreturn merged'},
 hints:['What if you sorted the intervals first?','After sorting by start time, overlapping intervals are adjacent.','Compare each interval\'s start to the previous merged interval\'s end.','If overlapping, extend the end; otherwise start a new merged interval.','Use max() for the new end to handle contained intervals.'],
 edgeCases:['Single interval','All intervals overlap','No intervals overlap','Intervals that touch at endpoints'],
@@ -1470,6 +1861,16 @@ patternQuiz:{summary:'Given a list of intervals, merge all that overlap into non
 {id:12,title:'Number of Islands',difficulty:'medium',category:'graphs',patterns:['dfs','bfs'],cognitiveLoad:'medium',recommendedTime:25,
 statement:'Given an m x n 2D binary grid which represents a map of \'1\'s (land) and \'0\'s (water), return the number of islands.\n\nAn island is surrounded by water and is formed by connecting adjacent lands horizontally or vertically.',
 examples:[{input:'grid = [["1","1","0"],["1","1","0"],["0","0","1"]]',output:'2',explanation:''}],
+runner:{
+  enabled:true,
+  signature:{js:'function numIslands(grid) -> number',python:'def num_islands(grid) -> int'},
+  entry:{js:'numIslands',python:'num_islands'},
+  tests:[
+    {args:[[['1','1','1','1','0'],['1','1','0','1','0'],['1','1','0','0','0'],['0','0','0','0','0']]],expected:1,comparator:'strictEqual'},
+    {args:[[['1','1','0','0','0'],['1','1','0','0','0'],['0','0','1','0','0'],['0','0','0','1','1']]],expected:3,comparator:'strictEqual'},
+    {args:[[['0']]],expected:0,comparator:'strictEqual'}
+  ]
+},
 commonMistakes:['Not marking visited cells (infinite loop)','Forgetting diagonal is not adjacent','Modifying the original grid vs using a visited set'],
 discussionPoints:['DFS vs BFS for flood fill','Marking visited in-place vs separate set','Union-Find alternative'],
 bruteForce:{approach:'Same as optimal — DFS/BFS is already the standard approach.',timeComplexity:'O(m×n)',spaceComplexity:'O(m×n)',code:'(Same as optimal)'},
@@ -1478,14 +1879,25 @@ hints:['Think of this as a graph problem — cells are nodes, adjacent cells are
 edgeCases:['Empty grid','All water','All land','Single cell'],
 followUps:['What about the area of the largest island?','What if islands can connect diagonally?','Surrounded regions problem?'],
 solutionExplanation:'Classic flood fill. Scan the grid; when you find an unvisited \'1\', that\'s a new island. DFS/BFS from that cell to mark all connected \'1\'s as visited. The total number of times you start a new DFS/BFS is the number of islands.',
-patternQuiz:{summary:'Count distinct groups of connected \'1\'s in a 2D grid of 0s and 1s.',correct:'dfs',distractors:['bfs','union-find','two-pointers']}},
+patternQuiz:{summary:'Count distinct groups of connected \'1\'s in a 2D grid of 0s and 1s.',correct:'dfs',distractors:['topological-sort','greedy','two-pointers']}},
 
 {id:13,title:'Coin Change',difficulty:'medium',category:'dynamic-programming',patterns:['dp'],cognitiveLoad:'medium',recommendedTime:25,
 statement:'You are given an integer array coins representing coin denominations and an integer amount representing a total amount of money.\n\nReturn the fewest number of coins needed to make up that amount. If it cannot be made up, return -1. You have an infinite supply of each coin.',
 examples:[{input:'coins = [1,5,11], amount = 15',output:'3',explanation:'5+5+5 = 15 (not 11+1+1+1+1 which is 5 coins — greedy fails!)'}],
+runner:{
+  enabled:true,
+  signature:{js:'function coinChange(coins, amount) -> number',python:'def coin_change(coins, amount) -> int'},
+  entry:{js:'coinChange',python:'coin_change'},
+  tests:[
+    {args:[[1,5,11],15],expected:3,comparator:'strictEqual'},
+    {args:[[2],3],expected:-1,comparator:'strictEqual'},
+    {args:[[1],0],expected:0,comparator:'strictEqual'},
+    {args:[[1,2,5],11],expected:3,comparator:'strictEqual'}
+  ]
+},
 commonMistakes:['Using greedy (take largest coin first) — doesn\'t always work','Not initializing DP array with infinity','Off-by-one in DP range'],
 discussionPoints:['Why greedy fails for this problem','Bottom-up DP tabulation','The recurrence: dp[i] = min(dp[i-c] + 1) for each coin c'],
-bruteForce:{approach:'Recursive: try every coin at each step.',timeComplexity:'O(amount^n) where n is number of coins',spaceComplexity:'O(amount)',code:'def coinChange(coins, amount):\n  if amount == 0: return 0\n  if amount < 0: return -1\n  best = float("inf")\n  for c in coins:\n    sub = coinChange(coins, amount-c)\n    if sub >= 0: best = min(best, sub+1)\n  return best if best < float("inf") else -1'},
+bruteForce:{approach:'Recursive: try every coin at each step.',timeComplexity:'O(k^amount) where k is number of coin denominations',spaceComplexity:'O(amount)',code:'def coinChange(coins, amount):\n  if amount == 0: return 0\n  if amount < 0: return -1\n  best = float("inf")\n  for c in coins:\n    sub = coinChange(coins, amount-c)\n    if sub >= 0: best = min(best, sub+1)\n  return best if best < float("inf") else -1'},
 optimal:{approach:'Bottom-up DP. dp[i] = minimum coins to make amount i. For each amount from 1 to target, try each coin.',timeComplexity:'O(amount × coins)',spaceComplexity:'O(amount)',code:'def coinChange(coins, amount):\n  dp = [float("inf")] * (amount + 1)\n  dp[0] = 0\n  for i in range(1, amount + 1):\n    for c in coins:\n      if c <= i:\n        dp[i] = min(dp[i], dp[i-c] + 1)\n  return dp[amount] if dp[amount] != float("inf") else -1'},
 hints:['Greedy won\'t work here. Think about why.','This is a classic DP problem.','Define dp[i] = fewest coins to make amount i.','For each amount i, try subtracting each coin c: dp[i] = min(dp[i-c] + 1).','Base case: dp[0] = 0. Initialize everything else to infinity.'],
 edgeCases:['Amount is 0','Amount is impossible to make','Single coin denomination','Very large amount'],
@@ -1496,6 +1908,16 @@ patternQuiz:{summary:'Find the minimum number of coins needed to make a given am
 {id:14,title:'Top K Frequent Elements',difficulty:'medium',category:'arrays',patterns:['heap','hash-map'],cognitiveLoad:'medium',recommendedTime:20,
 statement:'Given an integer array nums and an integer k, return the k most frequent elements. You may return the answer in any order.',
 examples:[{input:'nums = [1,1,1,2,2,3], k = 2',output:'[1,2]',explanation:''}],
+runner:{
+  enabled:true,
+  signature:{js:'function topKFrequent(nums, k) -> number[]',python:'def top_k_frequent(nums, k) -> list[int]'},
+  entry:{js:'topKFrequent',python:'top_k_frequent'},
+  tests:[
+    {args:[[1,1,1,2,2,3],2],expected:[1,2],comparator:'unorderedArray'},
+    {args:[[1],1],expected:[1],comparator:'unorderedArray'},
+    {args:[[4,4,4,1,1,2,2,2,3],2],expected:[4,2],comparator:'unorderedArray'}
+  ]
+},
 commonMistakes:['Not considering bucket sort approach','Using full sort when partial sort suffices','Misunderstanding heap operations'],
 discussionPoints:['Count frequencies with hash map','Min-heap of size k vs full sort','Bucket sort for O(n) solution'],
 bruteForce:{approach:'Count frequencies, sort by frequency, take top k.',timeComplexity:'O(n log n)',spaceComplexity:'O(n)',code:'from collections import Counter\nreturn [x for x,_ in Counter(nums).most_common(k)]'},
@@ -1509,9 +1931,13 @@ patternQuiz:{summary:'Return the k elements that appear most frequently in an ar
 {id:15,title:'Validate Binary Search Tree',difficulty:'medium',category:'trees',patterns:['dfs'],cognitiveLoad:'medium',recommendedTime:20,
 statement:'Given the root of a binary tree, determine if it is a valid binary search tree (BST).\n\nA valid BST has: left subtree only contains nodes less than the node, right subtree only contains nodes greater than the node, and both left and right subtrees must also be BSTs.',
 examples:[{input:'root = [2,1,3]',output:'true',explanation:''},{input:'root = [5,1,4,null,null,3,6]',output:'false',explanation:'Node 4 is in right subtree of 5 but is less than 5'}],
+runner:{
+  enabled:false,
+  note:'Tree problems require a tree data structure — use the guided steps to practice.'
+},
 commonMistakes:['Only checking immediate children instead of entire subtrees','Not passing min/max bounds correctly','Not handling equal values'],
 discussionPoints:['Recursive with min/max bounds','Inorder traversal should produce sorted sequence','Handling integer overflow with bounds'],
-bruteForce:{approach:'Inorder traversal, check if result is sorted.',timeComplexity:'O(n)',spaceComplexity:'O(n)',code:'def isValid(root):\n  arr = []\n  inorder(root, arr)\n  return arr == sorted(set(arr))'},
+bruteForce:{approach:'Inorder traversal, then check whether the resulting sequence is strictly increasing.',timeComplexity:'O(n log n)',spaceComplexity:'O(n)',code:'def isValid(root):\n  arr = []\n  inorder(root, arr)\n  return arr == sorted(arr) and len(arr) == len(set(arr))'},
 optimal:{approach:'Recursive validation with min/max bounds. Each node must be within a valid range.',timeComplexity:'O(n)',spaceComplexity:'O(h)',code:'def isValidBST(root, lo=float("-inf"), hi=float("inf")):\n  if not root: return True\n  if root.val <= lo or root.val >= hi:\n    return False\n  return isValidBST(root.left, lo, root.val) and \\\n         isValidBST(root.right, root.val, hi)'},
 hints:['Just checking left < node < right for each node is not enough.','Every node in the left subtree must be less than the current node.','Pass down valid ranges (min, max) as you recurse.','Left child: update upper bound. Right child: update lower bound.','Base case: null node is valid.'],
 edgeCases:['Empty tree','Single node','All left or all right children','Duplicate values'],
@@ -1520,8 +1946,17 @@ solutionExplanation:'The key insight is that each node must fall within a valid 
 patternQuiz:{summary:'Determine if a binary tree satisfies the BST property where left < node < right for all subtrees.',correct:'dfs',distractors:['bfs','binary-search','two-pointers']}},
 
 {id:16,title:'Subsets',difficulty:'medium',category:'recursion',patterns:['backtracking'],cognitiveLoad:'medium',recommendedTime:20,
-statement:'Given an integer array nums of unique elements, return all possible subsets (the power set). The solution set must not contain duplicate subsets.',
+statement:'Given an integer array nums of unique elements, return all possible subsets (the power set). The solution set must not contain duplicate subsets. You may return the subsets in any order.',
 examples:[{input:'nums = [1,2,3]',output:'[[],[1],[2],[1,2],[3],[1,3],[2,3],[1,2,3]]',explanation:''}],
+runner:{
+  enabled:true,
+  signature:{js:'function subsets(nums) -> number[][]',python:'def subsets(nums) -> list[list[int]]'},
+  entry:{js:'subsets',python:'subsets'},
+  tests:[
+    {args:[[1,2,3]],expected:[[],[1],[2],[3],[1,2],[1,3],[2,3],[1,2,3]],comparator:'unorderedArray'},
+    {args:[[0]],expected:[[],[0]],comparator:'unorderedArray'}
+  ]
+},
 commonMistakes:['Generating duplicate subsets','Not including the empty set','Modifying the current subset without proper backtracking'],
 discussionPoints:['Backtracking template','Include/exclude decision tree','Iterative approach: build from previous subsets','Bit manipulation approach'],
 bruteForce:{approach:'Iterative: start with [[]], for each number add it to all existing subsets.',timeComplexity:'O(n × 2^n)',spaceComplexity:'O(n × 2^n)',code:'result = [[]]\nfor num in nums:\n  result += [s + [num] for s in result]\nreturn result'},
@@ -1535,6 +1970,16 @@ patternQuiz:{summary:'Generate all possible subsets of a set of unique integers.
 {id:17,title:'Container With Most Water',difficulty:'medium',category:'arrays',patterns:['two-pointers'],cognitiveLoad:'medium',recommendedTime:20,
 statement:'You are given an integer array height of length n. There are n vertical lines drawn such that the two endpoints of the ith line are (i, 0) and (i, height[i]).\n\nFind two lines that together with the x-axis form a container, such that the container contains the most water. Return the maximum amount of water a container can store.',
 examples:[{input:'height = [1,8,6,2,5,4,8,3,7]',output:'49',explanation:'Lines at indices 1 and 8 with heights 8 and 7'}],
+runner:{
+  enabled:true,
+  signature:{js:'function maxArea(height) -> number',python:'def max_area(height) -> int'},
+  entry:{js:'maxArea',python:'max_area'},
+  tests:[
+    {args:[[1,8,6,2,5,4,8,3,7]],expected:49,comparator:'strictEqual'},
+    {args:[[1,1]],expected:1,comparator:'strictEqual'},
+    {args:[[4,3,2,1,4]],expected:16,comparator:'strictEqual'}
+  ]
+},
 commonMistakes:['Moving the taller pointer instead of the shorter one','Confusing this with trapping rain water','Not understanding why the greedy two-pointer works'],
 discussionPoints:['Why moving the shorter line is always correct','Width vs height trade-off','Proof of correctness for two-pointer approach'],
 bruteForce:{approach:'Check every pair of lines.',timeComplexity:'O(n²)',spaceComplexity:'O(1)',code:'max_area = 0\nfor i in range(len(height)):\n  for j in range(i+1, len(height)):\n    area = min(height[i], height[j]) * (j - i)\n    max_area = max(max_area, area)\nreturn max_area'},
@@ -1548,6 +1993,17 @@ patternQuiz:{summary:'Find two vertical lines that, with the x-axis, form a cont
 {id:18,title:'Course Schedule',difficulty:'medium',category:'graphs',patterns:['topological-sort'],cognitiveLoad:'high',recommendedTime:30,
 statement:'There are numCourses courses labeled from 0 to numCourses-1. You are given an array prerequisites where prerequisites[i] = [ai, bi] indicates that you must take course bi first before taking course ai.\n\nReturn true if you can finish all courses. Otherwise, return false.',
 examples:[{input:'numCourses = 2, prerequisites = [[1,0]]',output:'true',explanation:'Take course 0 then course 1'},{input:'numCourses = 2, prerequisites = [[1,0],[0,1]]',output:'false',explanation:'Circular dependency'}],
+runner:{
+  enabled:true,
+  signature:{js:'function canFinish(numCourses, prerequisites) -> boolean',python:'def can_finish(num_courses, prerequisites) -> bool'},
+  entry:{js:'canFinish',python:'can_finish'},
+  tests:[
+    {args:[2,[[1,0]]],expected:true,comparator:'strictEqual'},
+    {args:[2,[[1,0],[0,1]]],expected:false,comparator:'strictEqual'},
+    {args:[3,[[1,0],[2,1]]],expected:true,comparator:'strictEqual'},
+    {args:[1,[]],expected:true,comparator:'strictEqual'}
+  ]
+},
 commonMistakes:['Not detecting cycles properly','Using simple visited set instead of tracking recursion stack','Not building the adjacency list correctly'],
 discussionPoints:['This is cycle detection in a directed graph','Topological sort: BFS (Kahn\'s) vs DFS','In-degree tracking for BFS approach'],
 bruteForce:{approach:'DFS with cycle detection (three-color marking).',timeComplexity:'O(V+E)',spaceComplexity:'O(V+E)',code:'(Same complexity as optimal — both are graph traversals)'},
@@ -1561,6 +2017,16 @@ patternQuiz:{summary:'Determine if all courses can be completed given a list of 
 {id:19,title:'Word Search',difficulty:'medium',category:'recursion',patterns:['backtracking','dfs'],cognitiveLoad:'high',recommendedTime:25,
 statement:'Given an m x n grid of characters board and a string word, return true if word exists in the grid.\n\nThe word can be constructed from letters of sequentially adjacent cells (horizontally or vertically). The same cell may not be used more than once.',
 examples:[{input:'board = [["A","B","C","E"],["S","F","C","S"],["A","D","E","E"]], word = "ABCCED"',output:'true',explanation:''}],
+runner:{
+  enabled:true,
+  signature:{js:'function exist(board, word) -> boolean',python:'def exist(board, word) -> bool'},
+  entry:{js:'exist',python:'exist'},
+  tests:[
+    {args:[[['A','B','C','E'],['S','F','C','S'],['A','D','E','E']],'ABCCED'],expected:true,comparator:'strictEqual'},
+    {args:[[['A','B','C','E'],['S','F','C','S'],['A','D','E','E']],'SEE'],expected:true,comparator:'strictEqual'},
+    {args:[[['A','B','C','E'],['S','F','C','S'],['A','D','E','E']],'ABCB'],expected:false,comparator:'strictEqual'}
+  ]
+},
 commonMistakes:['Not restoring the cell after backtracking','Checking diagonals (only horizontal/vertical)','Not handling the starting position — need to try every cell'],
 discussionPoints:['DFS backtracking on a grid','Marking visited cells','Time complexity analysis'],
 bruteForce:{approach:'Same as optimal — backtracking is the standard approach.',timeComplexity:'O(m×n×4^L) where L is word length',spaceComplexity:'O(L) recursion depth',code:'(Same as optimal)'},
@@ -1574,6 +2040,10 @@ patternQuiz:{summary:'Determine if a word can be formed by following adjacent ce
 {id:20,title:'Implement Trie',difficulty:'medium',category:'tries',patterns:['trie'],cognitiveLoad:'high',recommendedTime:25,
 statement:'Implement a trie (prefix tree) with these methods:\n- insert(word): inserts a word into the trie\n- search(word): returns true if the word is in the trie\n- startsWith(prefix): returns true if any word in the trie starts with the given prefix',
 examples:[{input:'insert("apple"), search("apple"), search("app"), startsWith("app")',output:'null, true, false, true',explanation:''}],
+runner:{
+  enabled:false,
+  note:'Trie is a class-based data structure — use the guided steps to practice.'
+},
 commonMistakes:['Not distinguishing between a prefix and a complete word','Not initializing children correctly','Confusing search and startsWith'],
 discussionPoints:['Trie node structure: children map + isEnd flag','Time complexity per operation: O(word length)','Space vs hash set trade-off','Use cases: autocomplete, spell check'],
 bruteForce:{approach:'Use a list/set of words and iterate for each operation.',timeComplexity:'O(n×m) for search where n=word count, m=length',spaceComplexity:'O(total characters)',code:'words = set()\ndef search(word): return word in words\ndef startsWith(prefix): return any(w.startswith(prefix) for w in words)'},
@@ -1587,6 +2057,16 @@ patternQuiz:{summary:'Design a data structure that efficiently inserts words and
 {id:21,title:'Longest Increasing Subsequence',difficulty:'medium',category:'dynamic-programming',patterns:['dp','binary-search'],cognitiveLoad:'high',recommendedTime:30,
 statement:'Given an integer array nums, return the length of the longest strictly increasing subsequence.',
 examples:[{input:'nums = [10,9,2,5,3,7,101,18]',output:'4',explanation:'The LIS is [2,3,7,101]'}],
+runner:{
+  enabled:true,
+  signature:{js:'function lengthOfLIS(nums) -> number',python:'def length_of_lis(nums) -> int'},
+  entry:{js:'lengthOfLIS',python:'length_of_lis'},
+  tests:[
+    {args:[[10,9,2,5,3,7,101,18]],expected:4,comparator:'strictEqual'},
+    {args:[[0,1,0,3,2,3]],expected:4,comparator:'strictEqual'},
+    {args:[[7,7,7,7,7]],expected:1,comparator:'strictEqual'}
+  ]
+},
 commonMistakes:['Confusing subsequence with subarray','Not considering the O(n log n) patience sort approach','Incorrect DP transition'],
 discussionPoints:['O(n²) DP approach','O(n log n) with binary search (patience sorting)','Reconstructing the actual subsequence'],
 bruteForce:{approach:'DP: for each element, find the longest subsequence ending at that element.',timeComplexity:'O(n²)',spaceComplexity:'O(n)',code:'dp = [1] * len(nums)\nfor i in range(1, len(nums)):\n  for j in range(i):\n    if nums[j] < nums[i]:\n      dp[i] = max(dp[i], dp[j] + 1)\nreturn max(dp)'},
@@ -1595,11 +2075,21 @@ hints:['Think about what dp[i] means: longest subsequence ending at index i.','D
 edgeCases:['Single element','Already sorted','Reverse sorted','All elements equal'],
 followUps:['What is the actual subsequence (not just length)?','Number of longest increasing subsequences?','Longest common subsequence?'],
 solutionExplanation:'The O(n²) DP defines dp[i] as the LIS ending at i. The O(n log n) approach maintains a "tails" array where tails[k] is the smallest tail element of all increasing subsequences of length k+1. Binary search places each new element optimally.',
-patternQuiz:{summary:'Find the length of the longest strictly increasing subsequence in an array.',correct:'dp',distractors:['greedy','binary-search','two-pointers']}},
+patternQuiz:{summary:'Find the length of the longest strictly increasing subsequence in an array.',correct:'dp',distractors:['greedy','sliding-window','two-pointers']}},
 
 {id:22,title:'Group Anagrams',difficulty:'medium',category:'strings',patterns:['hash-map'],cognitiveLoad:'medium',recommendedTime:20,
 statement:'Given an array of strings strs, group the anagrams together. You can return the answer in any order.',
 examples:[{input:'strs = ["eat","tea","tan","ate","nat","bat"]',output:'[["bat"],["nat","tan"],["ate","eat","tea"]]',explanation:''}],
+runner:{
+  enabled:true,
+  signature:{js:'function groupAnagrams(strs) -> string[][]',python:'def group_anagrams(strs) -> list[list[str]]'},
+  entry:{js:'groupAnagrams',python:'group_anagrams'},
+  tests:[
+    {args:[['eat','tea','tan','ate','nat','bat']],expected:[['eat','tea','ate'],['tan','nat'],['bat']],comparator:'unorderedArray'},
+    {args:[['']],expected:[['']],comparator:'unorderedArray'},
+    {args:[['a']],expected:[['a']],comparator:'unorderedArray'}
+  ]
+},
 commonMistakes:['Using sorted string as key but not considering empty strings','Not handling single-character strings','Inefficient key generation'],
 discussionPoints:['Sorted string as hash key','Character count tuple as alternative key','Time complexity trade-offs between approaches'],
 bruteForce:{approach:'Compare every pair of strings to check if they are anagrams.',timeComplexity:'O(n² × k)',spaceComplexity:'O(nk)',code:'Compare each pair using sorted or char counts'},
@@ -1613,6 +2103,10 @@ patternQuiz:{summary:'Group strings together if they are anagrams of each other.
 {id:23,title:'Find Median from Data Stream',difficulty:'hard',category:'heaps',patterns:['heap'],cognitiveLoad:'high',recommendedTime:30,
 statement:'Design a data structure that supports:\n- addNum(num): add an integer from the data stream\n- findMedian(): return the median of all elements so far\n\nThe median is the middle value in an ordered list. If the list size is even, it is the average of the two middle values.',
 examples:[{input:'addNum(1), addNum(2), findMedian(), addNum(3), findMedian()',output:'null, null, 1.5, null, 2.0',explanation:'After [1,2] median is 1.5. After [1,2,3] median is 2.'}],
+runner:{
+  enabled:false,
+  note:'Data stream problems require a class-based data structure — use the guided steps to practice.'
+},
 commonMistakes:['Not balancing the two heaps','Getting confused about max-heap vs min-heap','Not handling the even/odd count correctly'],
 discussionPoints:['Two heaps: max-heap for lower half, min-heap for upper half','Balance invariant: sizes differ by at most 1','Why binary search insert is O(n) due to shifting'],
 bruteForce:{approach:'Keep sorted array, insert with binary search, return middle.',timeComplexity:'O(n) insert (shifting), O(1) median',spaceComplexity:'O(n)',code:'import bisect\nnums = []\ndef addNum(num): bisect.insort(nums, num)\ndef findMedian():\n  n = len(nums)\n  if n % 2: return nums[n//2]\n  return (nums[n//2-1] + nums[n//2]) / 2'},
@@ -1626,6 +2120,10 @@ patternQuiz:{summary:'Design a data structure that efficiently adds numbers and 
 {id:24,title:'Merge Two Sorted Lists',difficulty:'easy',category:'linked-lists',patterns:['two-pointers'],cognitiveLoad:'low',recommendedTime:15,
 statement:'You are given the heads of two sorted linked lists list1 and list2. Merge the two lists into one sorted list by splicing together the nodes. Return the head of the merged list.',
 examples:[{input:'list1 = [1,2,4], list2 = [1,3,4]',output:'[1,1,2,3,4,4]',explanation:''}],
+runner:{
+  enabled:false,
+  note:'Linked list problems require a linked list data structure — use the guided steps to practice.'
+},
 commonMistakes:['Not handling when one list is exhausted','Losing track of the head of the merged list','Not using a dummy/sentinel node'],
 discussionPoints:['Dummy node simplifies edge cases','Iterative vs recursive','This is the merge step of merge sort'],
 bruteForce:{approach:'Combine both into array, sort, rebuild list.',timeComplexity:'O((n+m) log(n+m))',spaceComplexity:'O(n+m)',code:'Collect all values, sort, build new list'},
@@ -1637,16 +2135,27 @@ solutionExplanation:'Classic merge operation. A dummy node avoids edge cases for
 patternQuiz:{summary:'Merge two sorted linked lists into a single sorted linked list.',correct:'two-pointers',distractors:['merge-sort','binary-search','heap']}},
 
 {id:25,title:'Valid Anagram',difficulty:'easy',category:'strings',patterns:['hash-map'],cognitiveLoad:'low',recommendedTime:10,
-statement:'Given two strings s and t, return true if t is an anagram of s, and false otherwise.\n\nAn anagram uses all original letters exactly once, rearranged.',
+statement:'Given two strings s and t, return true if t is an anagram of s, and false otherwise.\n\nAn anagram uses all original letters exactly once, rearranged. You may assume the strings contain only lowercase English letters.',
 examples:[{input:'s = "anagram", t = "nagaram"',output:'true',explanation:''},{input:'s = "rat", t = "car"',output:'false',explanation:''}],
+runner:{
+  enabled:true,
+  signature:{js:'function isAnagram(s, t) -> boolean',python:'def is_anagram(s, t) -> bool'},
+  entry:{js:'isAnagram',python:'is_anagram'},
+  tests:[
+    {args:['anagram','nagaram'],expected:true,comparator:'strictEqual'},
+    {args:['rat','car'],expected:false,comparator:'strictEqual'},
+    {args:['',''],expected:true,comparator:'strictEqual'},
+    {args:['ab','a'],expected:false,comparator:'strictEqual'}
+  ]
+},
 commonMistakes:['Not checking if lengths are equal first','Only checking one direction of character counts','Using sorting when counting is more efficient'],
 discussionPoints:['Sort and compare vs character counting','Unicode considerations','Early termination optimizations'],
 bruteForce:{approach:'Sort both strings and compare.',timeComplexity:'O(n log n)',spaceComplexity:'O(n)',code:'return sorted(s) == sorted(t)'},
-optimal:{approach:'Count character frequencies with a hash map or array. Both strings should have identical counts.',timeComplexity:'O(n)',spaceComplexity:'O(1) — at most 26 letters',code:'from collections import Counter\ndef isAnagram(s, t):\n  return Counter(s) == Counter(t)\n\n# Or manually:\nif len(s) != len(t): return False\ncount = [0] * 26\nfor c in s: count[ord(c)-ord("a")] += 1\nfor c in t: count[ord(c)-ord("a")] -= 1\nreturn all(c == 0 for c in count)'},
+optimal:{approach:'Count character frequencies with a hash map or fixed-size array. Both strings should have identical counts.',timeComplexity:'O(n)',spaceComplexity:'O(1) for lowercase English letters',code:'if len(s) != len(t):\n  return False\ncount = [0] * 26\nfor c in s:\n  count[ord(c)-ord("a")] += 1\nfor c in t:\n  count[ord(c)-ord("a")] -= 1\nreturn all(c == 0 for c in count)'},
 hints:['Anagrams have the same characters in the same quantities.','Quick check: are the lengths equal?','Count character frequencies in both strings.','An array of size 26 works for lowercase English letters.','Increment for s, decrement for t, check all zeros.'],
 edgeCases:['Empty strings','Single character','Same string','Different lengths'],
 followUps:['What if inputs contain Unicode?','What about finding all anagrams in a string (sliding window)?','Group anagrams in a list of strings?'],
-solutionExplanation:'Anagrams have identical character frequency distributions. Counting characters with a fixed-size array (26 for lowercase) is O(n) time and O(1) space. Sorting works but is O(n log n).',
+solutionExplanation:'Anagrams have identical character frequency distributions. Because the input is restricted to lowercase English letters, a fixed-size array of length 26 is enough, giving O(n) time and O(1) extra space. Sorting also works, but is O(n log n).',
 patternQuiz:{summary:'Determine if two strings are anagrams of each other.',correct:'hash-map',distractors:['two-pointers','sorting','sliding-window']}}
 ],
 
@@ -1696,5 +2205,4 @@ flashcards:[
 
 @push('styles')
 <style>[x-cloak]{display:none!important}</style>
-<style>.tip-code-editor-wrap .CodeMirror{font-size:13px;border-radius:0.5rem}.tip-code-editor-wrap .CodeMirror-scroll{min-height:280px}</style>
 @endpush
