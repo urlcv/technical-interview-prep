@@ -52,10 +52,10 @@
     </div>
   </template>
 
-  {{-- Energy mode selector --}}
+  {{-- Session mode selector --}}
   <div>
     <h2 class="text-lg font-bold text-gray-900 mb-1">How much time do you have?</h2>
-    <p class="text-sm text-gray-500 mb-4">Pick your energy level and we'll serve the right session.</p>
+    <p class="text-sm text-gray-500 mb-4">Pick your available time and we'll serve the right session.</p>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <button @click="startEnergySession(10)" class="group relative bg-white border-2 border-gray-200 hover:border-sky-400 rounded-xl p-5 text-left transition-all">
         <div class="text-2xl font-bold text-gray-900">10 min</div>
@@ -128,8 +128,8 @@
       <template x-for="p in allPatterns" :key="p"><option :value="p" x-text="p.replace(/-/g,' ')"></option></template>
     </select>
     <select x-model="filters.cognitiveLoad" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-      <option value="">Any energy</option>
-      <option value="low">Low energy</option><option value="medium">Medium energy</option><option value="high">High energy</option>
+      <option value="">Any difficulty</option>
+      <option value="low">Light</option><option value="medium">Moderate</option><option value="high">Challenging</option>
     </select>
     <span class="text-sm text-gray-400" x-text="filteredQuestions().length + ' questions'"></span>
   </div>
@@ -142,7 +142,7 @@
             <span class="px-2 py-0.5 rounded-full text-xs font-medium"
               :class="{'bg-green-100 text-green-700':q.difficulty==='easy','bg-amber-100 text-amber-700':q.difficulty==='medium','bg-red-100 text-red-700':q.difficulty==='hard'}"
               x-text="q.difficulty"></span>
-            <span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600" x-text="q.cognitiveLoad + ' energy'"></span>
+            <span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600" x-text="q.cognitiveLoad === 'low' ? 'light' : q.cognitiveLoad === 'medium' ? 'moderate' : 'challenging'"></span>
           </div>
           <div class="text-xs text-gray-500 truncate" x-text="q.patterns.map(p=>p.replace(/-/g,' ')).join(', ')"></div>
         </div>
