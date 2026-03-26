@@ -1170,6 +1170,7 @@ ensureJsRunner(){
   try{
     this._runner.jsWorker=new Worker('/js/tip-js-runner.worker.js');
     this._runner.jsWorker.onmessage=(ev)=>this.onRunnerMessage('js',ev);
+    this._runner.jsWorker.onerror=(e)=>{console.error('JS worker error',e);this.runner.lastError='JavaScript runner crashed: '+(e.message||e);this.runner.running=false;};
     return this._runner.jsWorker;
   }catch(e){
     this.runner.lastError='Could not start JavaScript runner.';
@@ -1183,6 +1184,7 @@ ensurePyRunner(){
   try{
     this._runner.pyWorker=new Worker('/js/tip-py-runner.worker.js');
     this._runner.pyWorker.onmessage=(ev)=>this.onRunnerMessage('python',ev);
+    this._runner.pyWorker.onerror=(e)=>{console.error('Py worker error',e);this.runner.pyLoading=false;this.runner.pyReady=false;this.runner.running=false;this.runner.lastError='Python runner error: '+(e.message||e);};
     return this._runner.pyWorker;
   }catch(e){
     this.runner.lastError='Could not start Python runner.';
