@@ -3,6 +3,11 @@
 let pyodideReadyPromise = null;
 let pyodide = null;
 
+function resetPyodide() {
+  pyodide = null;
+  pyodideReadyPromise = null;
+}
+
 async function ensurePyodide() {
   if (pyodide) return pyodide;
   if (!pyodideReadyPromise) {
@@ -98,6 +103,10 @@ function toJs(value) {
   return value;
 }
 
+function safePyRun(py, code) {
+  try { return py.runPython(code); } catch { return ''; }
+}
+
 async function runPythonTests({ code, entryName, tests }) {
   const py = await ensurePyodide();
 
@@ -113,8 +122,8 @@ sys.stderr = __tip_stdout
   try {
     await py.runPythonAsync(code);
   } catch (e) {
-    const stdout = py.runPython('__tip_stdout.getvalue()') || '';
-    py.runPython('sys.stdout = sys.__stdout__; sys.stderr = sys.__stderr__');
+    const stdout = safePyRun(py, '__tip_stdout.getvalue()') || '';
+    safePyRun(py, 'sys.stdout = sys.__stdout__; sys.stderr = sys.__stderr__');
     return {
       ok: false,
       error: `Syntax error: ${e.message}`,
@@ -125,8 +134,8 @@ sys.stderr = __tip_stdout
 
   const fn = py.globals.get(entryName);
   if (!fn) {
-    const stdout = py.runPython('__tip_stdout.getvalue()') || '';
-    py.runPython('sys.stdout = sys.__stdout__; sys.stderr = sys.__stderr__');
+    const stdout = safePyRun(py, '__tip_stdout.getvalue()') || '';
+    safePyRun(py, 'sys.stdout = sys.__stdout__; sys.stderr = sys.__stderr__');
     return {
       ok: false,
       error: `Could not find a function named "${entryName}".`,
@@ -142,18 +151,18 @@ sys.stderr = __tip_stdout
     const t = tests[i];
     const args = Array.isArray(t.args) ? t.args : [];
     // Reset stdout capture for each test
-    py.runPython('__tip_stdout.truncate(0); __tip_stdout.seek(0)');
+    safePyRun(py, '__tip_stdout.truncate(0); __tip_stdout.seek(0)');
     try {
       const testStartedAt = performance.now();
       const pyRes = fn(...args);
       const actual = toJs(pyRes);
       const elapsedMs = performance.now() - testStartedAt;
-      const stdout = py.runPython('__tip_stdout.getvalue()') || '';
+      const stdout = safePyRun(py, '__tip_stdout.getvalue()') || '';
       const ok = compare(t.comparator, actual, t.expected);
       if (ok) passed++;
       results.push({ index: i, ok, args, expected: t.expected, actual, stdout, elapsedMs });
     } catch (e) {
-      const stdout = py.runPython('__tip_stdout.getvalue()') || '';
+      const stdout = safePyRun(py, '__tip_stdout.getvalue()') || '';
       results.push({
         index: i,
         ok: false,
@@ -168,7 +177,7 @@ sys.stderr = __tip_stdout
   }
 
   // Restore stdout
-  try { py.runPython('sys.stdout = sys.__stdout__; sys.stderr = sys.__stderr__'); } catch {}
+  safePyRun(py, 'sys.stdout = sys.__stdout__; sys.stderr = sys.__stderr__');
   try { fn.destroy && fn.destroy(); } catch {}
 
   return {
@@ -194,6 +203,7 @@ self.onmessage = async (ev) => {
         ok: true,
       });
     } catch (e) {
+      resetPyodide();
       self.postMessage({
         type: 'preloadResult',
         requestId: msg.requestId,
@@ -219,6 +229,8 @@ self.onmessage = async (ev) => {
       payload,
     });
   } catch (e) {
+    const isFatal = /fatally failed/.test(String(e));
+    if (isFatal) resetPyodide();
     self.postMessage({
       type: 'result',
       requestId: msg.requestId,
@@ -226,7 +238,10 @@ self.onmessage = async (ev) => {
       finishedAt: Date.now(),
       payload: {
         ok: false,
-        error: String(e && e.message ? e.message : e),
+        fatal: isFatal,
+        error: isFatal
+          ? 'Python runtime crashed. Click Run again to reload it.'
+          : String(e && e.message ? e.message : e),
       },
     });
   }

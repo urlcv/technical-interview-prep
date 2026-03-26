@@ -1217,6 +1217,14 @@ onRunnerMessage(kind,ev){
   if(this._runner.timeoutId){clearTimeout(this._runner.timeoutId);this._runner.timeoutId=null;}
   this.runner.running=false;
   this.runner.lastLang=req.lang;
+  if(msg.payload&&msg.payload.fatal){
+    this.killRunner('python');
+    this.runner.pyReady=false;
+    this.runner.pyLoading=false;
+    this.runner.lastResult=null;
+    this.runner.lastError=msg.payload.error||'Python runtime crashed. Click Run again to reload.';
+    return;
+  }
   if(msg.payload&&msg.payload.ok!==undefined){
     this.runner.lastResult=msg.payload;
     this.runner.lastError=msg.payload.ok?null:(msg.payload.error||null);
