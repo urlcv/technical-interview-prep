@@ -1164,24 +1164,13 @@ isStubCode(code){
   return stripped.length===0;
 },
 
-_createBlobWorker(url,onmessage,onerror){
-  // Fetch worker source and create via blob: URL to avoid Chrome extension interference
-  return fetch(url).then(r=>{if(!r.ok)throw new Error('Failed to fetch '+url);return r.text()}).then(src=>{
-    const blob=new Blob([src],{type:'application/javascript'});
-    const w=new Worker(URL.createObjectURL(blob));
-    w.onmessage=onmessage;
-    w.onerror=onerror;
-    return w;
-  });
-},
-
-async ensureJsRunner(){
+ensureJsRunner(){
   if(!this.runner.supported)return null;
   if(this._runner.jsWorker)return this._runner.jsWorker;
   try{
-    this._runner.jsWorker=await this._createBlobWorker('/js/tip-js-runner.worker.js',
-      (ev)=>this.onRunnerMessage('js',ev),
-      (e)=>{console.error('JS worker error',e);this.runner.lastError='JavaScript runner crashed: '+(e.message||e);this.runner.running=false;});
+    this._runner.jsWorker=new Worker('/js/tip-js-runner.worker.js?v=2');
+    this._runner.jsWorker.onmessage=(ev)=>this.onRunnerMessage('js',ev);
+    this._runner.jsWorker.onerror=(e)=>{console.error('JS worker error',e);this.runner.lastError='JavaScript runner crashed: '+(e.message||e);this.runner.running=false;};
     return this._runner.jsWorker;
   }catch(e){
     console.error('JS worker init failed',e);
@@ -1190,13 +1179,13 @@ async ensureJsRunner(){
   }
 },
 
-async ensurePyRunner(){
+ensurePyRunner(){
   if(!this.runner.supported)return null;
   if(this._runner.pyWorker)return this._runner.pyWorker;
   try{
-    this._runner.pyWorker=await this._createBlobWorker('/js/tip-py-runner.worker.js',
-      (ev)=>this.onRunnerMessage('python',ev),
-      (e)=>{console.error('Py worker error',e);this.runner.pyLoading=false;this.runner.pyReady=false;this.runner.running=false;this.runner.lastError='Python runner error: '+(e.message||e);});
+    this._runner.pyWorker=new Worker('/js/tip-py-runner.worker.js?v=2');
+    this._runner.pyWorker.onmessage=(ev)=>this.onRunnerMessage('python',ev);
+    this._runner.pyWorker.onerror=(e)=>{console.error('Py worker error',e);this.runner.pyLoading=false;this.runner.pyReady=false;this.runner.running=false;this.runner.lastError='Python runner error: '+(e.message||e);};
     return this._runner.pyWorker;
   }catch(e){
     console.error('Py worker init failed',e);
@@ -1205,12 +1194,12 @@ async ensurePyRunner(){
   }
 },
 
-async preloadPython(){
+preloadPython(){
   if(!this.runner.supported)return;
   if(this.runner.pyReady||this.runner.pyLoading)return;
+  const w=this.ensurePyRunner();
+  if(!w)return;
   this.runner.pyLoading=true;
-  const w=await this.ensurePyRunner();
-  if(!w){this.runner.pyLoading=false;return;}
   const requestId='py_preload_'+(++this._runner.requestSeq);
   w.postMessage({type:'preload',requestId});
 },
@@ -1254,7 +1243,7 @@ killRunner(which){
   }catch(e){}
 },
 
-async runTests(){
+runTests(){
   this.resetRunnerState();
   const cfg=this.runnerConfig();
   if(!cfg){this.runner.lastError='No runnable tests are defined for this question yet.';return;}
@@ -1276,7 +1265,7 @@ async runTests(){
 
   const payload=JSON.parse(JSON.stringify({code,entryName,tests:cfg.tests||[]}));
   if(isJs){
-    const w=await this.ensureJsRunner();
+    const w=this.ensureJsRunner();
     if(!w){this.runner.running=false;return;}
     w.postMessage({type:'run',requestId,payload});
     this._runner.timeoutId=setTimeout(()=>{this.runner.running=false;this.runner.lastError='Timed out running JavaScript tests.';this.killRunner('js');this.ensureJsRunner();},4000);
@@ -1284,7 +1273,7 @@ async runTests(){
   }
 
   if(isPy){
-    const w=await this.ensurePyRunner();
+    const w=this.ensurePyRunner();
     if(!w){this.runner.running=false;return;}
     if(!this.runner.pyReady&&!this.runner.pyLoading)this.preloadPython();
     w.postMessage({type:'run',requestId,payload});
